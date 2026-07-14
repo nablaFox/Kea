@@ -9,67 +9,80 @@ type
 
   Index* = uint32
 
-  HandleId = Natural
+  MeshStorage = ref object
+    vertexBuffer: GLuint
+    indexBuffer: GLuint
 
-  DrawableData = object
-    transform: Transform
-    material: Material
-    mesh: HandleId
+    nextVertexOffset: uint32
+    nextIndexOffset: uint32
 
-  MeshData = object
+    vertexCapacity: uint32
+    indexCapacity: uint32
+
+  Mesh* = ref object
+    storage: MeshStorage
+
     vertices: seq[Vertex]
     indices: seq[Index]
 
     vertexOffset: uint32
     indexOffset: uint32
 
-  KeaState = object
-    width: Natural
-    height: Natural
-    title: string
+    vertexCapacity: uint32
+    indexCapacity: uint32
 
-    vao: GLuint
-    vertexBuffer: GLuint
-    indexBuffer: GLuint
-
-    shaderProgram: GLuint
-
-    window: GLFWWindow
-
-    meshes: seq[MeshData]
-    drawables: seq[DrawableData]
-
-    currentKeys: array[Key, bool]
-    previousKeys: array[Key, bool]
-
-  Drawable* = object
-    state: ref KeaState
-    handle: HandleId
-
-  Mesh* = object
-    state: ref KeaState
-    handle: HandleId
+  Drawable* = ref object
+    mesh: Mesh
+    transform: Transform
+    material: Material
 
   Frame* = object
     delta*: float32
     input*: Input
 
   Input* = object
-    state: ref KeaState
+    kea: Kea
 
-  Kea* = object
-    state: ref KeaState
+  KeaObj = object
+    width: Natural
+    height: Natural
+    title: string
+
+    vao: GLuint
+    shaderProgram: GLuint
+
+    window: GLFWWindow
+
+    meshStorage: MeshStorage
+
+    drawables: seq[Drawable]
+
+    currentKeys: array[Key, bool]
+    previousKeys: array[Key, bool]
+
+  Kea* = ref KeaObj
+
+proc `=destroy`(kea: KeaObj) =
+  glDeleteProgram(kea.shaderProgram)
+
+  glDeleteBuffers(1, unsafeAddr kea.meshStorage.vertexBuffer)
+  glDeleteBuffers(1, unsafeAddr kea.meshStorage.indexBuffer)
+  glDeleteVertexArrays(1, unsafeAddr kea.vao)
+
+  kea.window.destroyWindow()
+
+  glfwTerminate()
 
 proc errorCallback(error: int32, description: cstring) {.cdecl.} =
   echo "GLFW error ", error, ": ", description
 
 proc initKea*(
-  width: Natural, 
-  height: Natural, 
-  title: string,
-  vertexCapacity: Natural = 10_000,
-  indexCapacity: Natural = 30_000
-): Kea = 
+    width: Natural,
+    height: Natural,
+    title: string,
+    vertexCapacity: Natural = 10_000,
+    indexCapacity: Natural = 30_000,
+): Kea =
   when not defined(release):
     discard glfwSetErrorCallback(errorCallback)
 
@@ -102,31 +115,16 @@ proc initKea*(
 
   # Vertex buffer
   glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer)
-  glBufferData(
-    GL_ARRAY_BUFFER,
-    vertexCapacity * sizeof(Vertex),
-    nil,
-    GL_DYNAMIC_DRAW
-  )
+  glBufferData(GL_ARRAY_BUFFER, vertexCapacity * sizeof(Vertex), nil, GL_DYNAMIC_DRAW)
 
   # Index buffer
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer)
   glBufferData(
-    GL_ELEMENT_ARRAY_BUFFER,
-    indexCapacity * sizeof(Index),
-    nil,
-    GL_DYNAMIC_DRAW
+    GL_ELEMENT_ARRAY_BUFFER, indexCapacity * sizeof(Index), nil, GL_DYNAMIC_DRAW
   )
 
   # Position attribute
-  glVertexAttribPointer(
-    0'u32,
-    3,
-    EGL_FLOAT,
-    false,
-    GLsizei(sizeof(Vertex)),
-    nil
-  )
+  glVertexAttribPointer(0'u32, 3, EGL_FLOAT, false, GLsizei(sizeof(Vertex)), nil)
 
   glEnableVertexAttribArray(0)
 
@@ -137,7 +135,7 @@ proc initKea*(
     EGL_FLOAT,
     false,
     GLsizei(sizeof(Vertex)),
-    cast[pointer](offsetof(Vertex, normal))
+    cast[pointer](offsetof(Vertex, normal)),
   )
 
   glEnableVertexAttribArray(1)
@@ -149,200 +147,170 @@ proc initKea*(
     EGL_FLOAT,
     false,
     GLsizei(sizeof(Vertex)),
-    cast[pointer](offsetof(Vertex, uv))
+    cast[pointer](offsetof(Vertex, uv)),
   )
 
   glEnableVertexAttribArray(2)
 
   let shaderProgram = createShaderProgram(defaultVertSource, defaultFragSource)
 
-  result.state = (ref KeaState)(
+  let storage = MeshStorage(
+    vertexBuffer: vertexBuffer,
+    indexBuffer: indexBuffer,
+    vertexCapacity: uint32(vertexCapacity),
+    indexCapacity: uint32(indexCapacity),
+    nextVertexOffset: 0,
+    nextIndexOffset: 0,
+  )
+
+  Kea(
     width: width,
     height: height,
     title: title,
-
     vao: vao,
-    vertexBuffer: vertexBuffer,
-    indexBuffer: indexBuffer,
-
+    meshStorage: storage,
     shaderProgram: shaderProgram,
-
     window: window,
-
-    meshes: @[],
     drawables: @[],
   )
 
-proc `=destroy`*(kea: Kea) = 
-  glDeleteProgram(kea.state.shaderProgram)
+proc uploadMesh(mesh: Mesh) =
+  let vertices = mesh.vertices
+  let indices = mesh.indices
 
-  glDeleteBuffers(1, addr kea.state.vertexBuffer)
-  glDeleteBuffers(1, addr kea.state.indexBuffer)
-  glDeleteVertexArrays(1, addr kea.state.vao)
+  let vertexData = if vertices.len > 0: addr mesh.vertices[0] else: nil
 
-  kea.state.window.destroyWindow()
+  let indexData = if indices.len > 0: addr mesh.indices[0] else: nil
 
-  glfwTerminate()
-
-proc allocateMeshData(
-    state: ref KeaState,
-    vertices: openArray[Vertex],
-    indices: openArray[Index],
-    indexOffset: uint32,
-    vertexOffset: uint32,
-): MeshData =
-  let vertexData =
-    if vertices.len > 0: addr vertices[0]
-    else: nil
-
-  let indexData =
-    if indices.len > 0: addr indices[0]
-    else: nil
-  
-  glBindBuffer(GL_ARRAY_BUFFER, state.vertexBuffer)
+  glBindBuffer(GL_ARRAY_BUFFER, mesh.storage.vertexBuffer)
 
   glBufferSubData(
     GL_ARRAY_BUFFER,
-    GLintptr(vertexOffset * uint32(sizeof(Vertex))),
+    GLintptr(mesh.vertexOffset * uint32(sizeof(Vertex))),
     GLsizeiptr(vertices.len * sizeof(Vertex)),
-    vertexData
+    vertexData,
   )
 
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, state.indexBuffer)
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.storage.indexBuffer)
   glBufferSubData(
     GL_ELEMENT_ARRAY_BUFFER,
-    GLintptr(indexOffset * uint32(sizeof(Index))),
+    GLintptr(mesh.indexOffset * uint32(sizeof(Index))),
     GLsizeiptr(indices.len * sizeof(Index)),
-    indexData
-  )
-
-  MeshData(
-    vertices: @vertices,
-    indices: @indices,
-    indexOffset: indexOffset,
-    vertexOffset: vertexOffset,
+    indexData,
   )
 
 proc createMesh*(
-    kea: Kea, 
-    vertices: openArray[Vertex], 
-    indices: openArray[Index]
+    kea: Kea, vertices: openArray[Vertex], indices: openArray[Index]
 ): Mesh =
-  let last = if kea.state.meshes.len > 0: kea.state.meshes[^1] else: default(MeshData)
+  let storage = kea.meshStorage
 
-  let vertexOffset = last.vertexOffset + uint32(last.vertices.len)
-  let indexOffset  = last.indexOffset  + uint32(last.indices.len)
+  doAssert storage.nextVertexOffset + uint32(vertices.len) <= storage.vertexCapacity
+  doAssert storage.nextIndexOffset + uint32(indices.len) <= storage.indexCapacity
 
-  let meshData = allocateMeshData(
-    kea.state, 
-    vertices, 
-    indices, 
-    vertexOffset=vertexOffset, 
-    indexOffset=indexOffset
+  result = Mesh(
+    storage: storage,
+    vertices: @vertices,
+    indices: @indices,
+    vertexOffset: storage.nextVertexOffset,
+    indexOffset: storage.nextIndexOffset,
+    vertexCapacity: uint32(vertices.len),
+    indexCapacity: uint32(indices.len),
   )
 
-  let handle = kea.state.meshes.len
+  storage.nextVertexOffset += uint32(vertices.len)
+  storage.nextIndexOffset += uint32(indices.len)
 
-  kea.state.meshes.add(meshData)
+  uploadMesh(result)
 
-  Mesh(state: kea.state, handle: handle)
+proc update*(mesh: Mesh, vertices: sink seq[Vertex], indices: sink seq[Index]) =
+  doAssert uint32(vertices.len) <= mesh.vertexCapacity
+  doAssert uint32(indices.len) <= mesh.indexCapacity
 
-proc update*(
-  mesh: Mesh, 
-  vertices: openArray[Vertex], 
-  indices: openArray[Index]
-) =
-  let index = mesh.handle
-  let old = mesh.state.meshes[index]
+  mesh.vertices = vertices
+  mesh.indices = indices
 
-  doAssert vertices.len <= old.vertices.len
-  doAssert indices.len <= old.indices.len
+  uploadMesh(mesh)
 
-  mesh.state.meshes[index] = allocateMeshData(
-    mesh.state,
-    vertices,
-    indices,
-    indexOffset = old.indexOffset,
-    vertexOffset = old.vertexOffset,
-  )
+proc indices*(mesh: Mesh): lent seq[Index] =
+  mesh.indices
 
-proc indices*(mesh: Mesh): seq[Index] =
-  mesh.state.meshes[mesh.handle].indices
+proc vertices*(mesh: Mesh): lent seq[Vertex] =
+  mesh.vertices
 
-proc vertices*(mesh: Mesh): seq[Vertex] =
-  mesh.state.meshes[mesh.handle].vertices
+proc `vertices=`*(mesh: Mesh, vertices: sink seq[Vertex]) =
+  doAssert uint32(vertices.len) <= mesh.vertexCapacity
+  mesh.vertices = vertices
+  uploadMesh(mesh)
 
-proc `vertices=`*(mesh: Mesh, vertices: seq[Vertex]) =
-  mesh.update(vertices, mesh.indices)
+proc `indices=`*(mesh: Mesh, indices: sink seq[Index]) =
+  doAssert uint32(indices.len) <= mesh.indexCapacity
+  mesh.indices = indices
+  uploadMesh(mesh)
 
 proc update*(mesh: Mesh, positions: openArray[Vec3]) =
   # TODO: recalculate new vertices with new normals
   mesh.vertices = @[]
 
 proc add*(
-    kea: Kea, 
-    mesh: Mesh, 
-    transform = IdentityTransform, 
-    material = DefaultMaterial
+    kea: Kea, mesh: Mesh, transform = IdentityTransform, material = DefaultMaterial
 ): Drawable =
-  let handle = kea.state.drawables.len
+  doAssert mesh.storage == kea.meshStorage,
+    "Mesh belongs to a different Kea instance"
 
-  let drawableData = DrawableData(
-    transform: transform,
-    material: material,
-    mesh: mesh.handle
+  result = Drawable(
+    transform: transform, 
+    material: material, 
+    mesh: mesh
   )
 
-  kea.state.drawables.add(drawableData)
+  kea.drawables.add(result)
 
-  Drawable(state: kea.state, handle: handle)
+proc transform*(drawable: Drawable): var Transform =
+  drawable.transform
 
-proc down*(input: Input, key: Key): bool = discard
-  input.state.currentKeys[key]
+proc down*(input: Input, key: Key): bool =
+  input.kea.currentKeys[key]
 
 proc pressed*(input: Input, key: Key): bool =
-  input.state.currentKeys[key] and
-    not input.state.previousKeys[key]
+  input.kea.currentKeys[key] and not input.kea.previousKeys[key]
 
 proc released*(input: Input, key: Key): bool =
-  not input.state.currentKeys[key] and
-    input.state.previousKeys[key]
+  not input.kea.currentKeys[key] and input.kea.previousKeys[key]
 
-proc render*(kea: Kea) = 
+proc render*(kea: Kea) =
   glClearColor(0.1, 0.1, 0.1, 1.0)
   glClear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT)
-     
-  glUseProgram(kea.state.shaderProgram)
-  glBindVertexArray(kea.state.vao)
 
-  for drawable in kea.state.drawables:
-    let mesh = kea.state.meshes[drawable.mesh]
+  glUseProgram(kea.shaderProgram)
+  glBindVertexArray(kea.vao)
+
+  for drawable in kea.drawables:
+    let mesh = drawable.mesh
 
     glDrawElementsBaseVertex(
       GL_TRIANGLES,
       GLsizei(mesh.indices.len),
       GL_UNSIGNED_INT,
       cast[pointer](mesh.indexOffset * uint32(sizeof(Index))),
-      GLint(mesh.vertexOffset)
+      GLint(mesh.vertexOffset),
     )
 
-    kea.state.window.swapBuffers() 
+  kea.window.swapBuffers()
 
 iterator frames*(kea: Kea): Frame =
   var previousTime = glfwGetTime()
 
-  while not kea.state.window.windowShouldClose:
+  while not kea.window.windowShouldClose:
     let currentTime = glfwGetTime()
-
     let delta = float32(currentTime - previousTime)
 
     previousTime = currentTime
 
     glfwPollEvents()
 
-    kea.state.previousKeys = kea.state.currentKeys
+    kea.previousKeys = kea.currentKeys
 
     for key in Key:
-      kea.state.currentKeys[key] = kea.state.window.getKey(int32(key)) == GLFW_PRESS
+      kea.currentKeys[key] = kea.window.getKey(int32(key)) == GLFW_PRESS
 
-    yield Frame(delta: delta, input: Input(state: kea.state))
+    yield Frame(delta: delta, input: Input(kea: kea))

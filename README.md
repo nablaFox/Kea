@@ -31,6 +31,8 @@ Resources:
 ## Usage
 
 ```nim
+import Kea
+
 let kea = initKea(width=800, height=600, title="demo")
 
 let ball = kea.createMesh(Sphere) # mesh is just an handle to internally saved mesh

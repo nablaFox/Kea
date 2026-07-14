@@ -23,3 +23,9 @@ proc position*(transform: Transform): Vec3 =
 proc `position=`*(transform: var Transform, value: Vec3) =
   transform.position = value
   transform.dirty = true
+
+proc matrix*(transform: Transform): Mat4 =
+  if transform.dirty: 
+    discard
+
+  transform.cachedMatrix
