@@ -1,3 +1,5 @@
+import nimgl/glfw
+
 type
   Key* = enum
-    Escape
+    Escape = GLFWKey.Escape

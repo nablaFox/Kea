@@ -33,13 +33,13 @@ Resources:
 ```nim
 let kea = initKea(width=800, height=600, title="demo")
 
-let ball = kea.createMesh(SPHERE) # mesh is just an handle to internally saved mesh
+let ball = kea.createMesh(Sphere) # mesh is just an handle to internally saved mesh
 
 let ball = kea.createMesh(vertices, indices) # with custom data
 
 let drawable = kea.add(material, ball, transform) # optional transform
 
-let drawable = kea.add(material, SPHERE, transform) # optional transform
+let drawable = kea.add(material, Sphere, transform) # optional transform
 
 for frame in kea.frames:
     drawable.transform = transform
