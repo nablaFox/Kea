@@ -1,2 +1,4 @@
 --noNimblePath
 --path:"/home/icecube/Projects/Kea/src"
+--path:"/home/icecube/Projects/Kea/nimbledeps/pkgs2/nimgl-1.3.2-9d94ff205d72321e896dd6130403510e9a1c8a5d"
+--path:"/home/icecube/Projects/Kea/nimbledeps/pkgs2/nimgl-1.3.2-9d94ff205d72321e896dd6130403510e9a1c8a5d/src"

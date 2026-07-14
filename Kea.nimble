@@ -12,3 +12,4 @@ bin           = @["Kea"]
 # Dependencies
 
 requires "nim >= 2.2.10"
+requires "nimgl >= 1.3.2"

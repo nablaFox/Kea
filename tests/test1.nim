@@ -6,7 +6,3 @@
 # To run these tests, simply execute `nimble test`.
 
 import unittest
-
-import Kea/submodule
-test "correct welcome":
-  check getWelcomeMessage() == "Hello, World!"

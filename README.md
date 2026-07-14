@@ -27,3 +27,33 @@ Resources:
 - https://pbr-book.org/4ed/contents
 - https://google.github.io/filament/Filament.md.html
 - https://blog.selfshadow.com/publications/s2017-shading-course/imageworks/s2017_pbs_imageworks_slides_v2.pdf
+
+## Usage
+
+```nim
+let kea = initKea(width=800, height=600, title="demo")
+
+let ball = kea.createMesh(SPHERE) # mesh is just an handle to internally saved mesh
+
+let ball = kea.createMesh(vertices, indices) # with custom data
+
+let drawable = kea.add(material, ball, transform) # optional transform
+
+let drawable = kea.add(material, SPHERE, transform) # optional transform
+
+for frame in kea.frames:
+    drawable.transform = transform
+
+    kea.updateFirstPersonCamera(frame) # first person control
+    kea.updateEditorCamera(frame) # editor control
+    kea.camera.transform = transform # custom
+
+    ball.updatePositions(positions) # mesh deformations
+
+    if frame.input.keyPressed(Escape):
+      break
+
+    echo frame.delta
+
+    kea.render()
+```

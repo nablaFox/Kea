@@ -1,0 +1,3 @@
+type
+  Key* = enum
+    Escape
