@@ -17,13 +17,17 @@ const IdentityTransform* = Transform(
   dirty: false
 )
 
-proc transform*(position = vec3(0.0), rotation = vec3(0.0), scale = vec3(1.0)): Transform =
+proc transform*(
+  position: Vec3 = vec3(0.0),
+  rotation: Vec3 = vec3(0.0),
+  scale: Vec3 = vec3(1.0),
+): Transform =
   Transform(
     position: position,
     rotation: rotation,
     scale: scale,
     cachedMatrix: IdentityMatrix4,
-    dirty: true
+    dirty: true,
   )
 
 proc position*(transform: var Transform): var Vec3 =

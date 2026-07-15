@@ -1,12 +1,34 @@
-import Kea/[core, keys, material, math, primitives, transform, camera]
-import std/math
+import 
+  Kea/[
+    core, 
+    keys, 
+    material, 
+    math, 
+    primitives, 
+    transform, 
+    camera, 
+    drawable, 
+    mesh, 
+    input
+  ], 
+  std/math
 
-export core, keys, material, math, primitives, transform, camera
+export 
+  core, 
+  keys, 
+  material, 
+  math, 
+  primitives, 
+  transform, 
+  camera, 
+  drawable, 
+  mesh, 
+  input
 
 when isMainModule:
   let kea = initKea(width = 800, height = 600, title = "demo")
 
-  let triangle = kea.add(Triangle, position = [0.0'f32, 0.0, -5.0])
+  let triangle = kea.add(Triangle, z = -5.0)
 
   for frame in kea.frames:
     if frame.input.pressed(Escape):
