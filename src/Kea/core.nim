@@ -2,8 +2,8 @@ import transform, math, material, shaders, camera, colors, mesh, drawable, input
 import nimgl/[glfw, opengl]
 
 const
-  DefaultVertexCapacity {.intdefine: "kea.vertexCapacity".} = 10_000
-  DefaultIndexCapacity {.intdefine: "kea.indexCapacity".} = 30_000
+  DefaultVertexCapacity {.intdefine: "kea.vertexCapacity".} = 1_000_000
+  DefaultIndexCapacity {.intdefine: "kea.indexCapacity".} = 1_000_000
 
 type
   Frame* = object
