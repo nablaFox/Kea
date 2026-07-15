@@ -50,6 +50,9 @@ type
     height: Natural
     title: string
 
+    frameWidth: Natural
+    frameHeight: Natural
+
     vao: GLuint
     shaderProgram: GLuint
     modelLocation: GLint
@@ -84,19 +87,44 @@ proc `=destroy`(kea: KeaObj) =
 proc errorCallback(error: int32, description: cstring) {.cdecl.} =
   echo "GLFW error ", error, ": ", description
 
+proc windowSizeCallback(
+    window: GLFWWindow,
+    width: int32,
+    height: int32,
+) {.cdecl.} =
+  let kea = cast[Kea](window.getWindowUserPointer())
+
+  kea.width = Natural(width)
+  kea.height = Natural(height)
+
+proc framebufferSizeCallback(
+    window: GLFWWindow,
+    width: int32,
+    height: int32,
+) {.cdecl.} =
+  let kea = cast[Kea](window.getWindowUserPointer())
+
+  kea.frameWidth = Natural(width)
+  kea.frameHeight = Natural(height)
+
+  glViewport(0, 0, width, height)
+
 proc initKea*(
     width: Natural,
     height: Natural,
     title: string,
     vertexCapacity: Natural = 10_000,
     indexCapacity: Natural = 30_000,
+    resizable = false
 ): Kea =
   when not defined(release):
     discard glfwSetErrorCallback(errorCallback)
 
   doAssert glfwInit(), "Failed to initialize GLFW"
 
-  glfwWindowHint(GLFWResizable, GLFW_FALSE)
+  if not resizable:
+    glfwWindowHint(GLFWResizable, GLFW_FALSE)
+
   glfwWindowHint(GLFWContextVersionMajor, 3)
   glfwWindowHint(GLFWContextVersionMinor, 3)
   glfwWindowHint(GLFWOpenglProfile, GLFW_OPENGL_CORE_PROFILE)
@@ -112,6 +140,15 @@ proc initKea*(
 
   glEnable(GL_DEPTH_TEST)
   glEnable(GL_MULTISAMPLE)
+
+  var frameWidth, frameHeight: int32
+
+  window.getFramebufferSize(
+    addr frameWidth,
+    addr frameHeight
+  )
+
+  glViewport(0, 0, frameWidth, frameHeight)
 
   var vao, indexBuffer, vertexBuffer: GLuint
 
@@ -179,9 +216,13 @@ proc initKea*(
     nextIndexOffset: 0,
   )
 
-  Kea(
+  result = Kea(
     width: width,
     height: height,
+
+    frameWidth: Natural(frameWidth),
+    frameHeight: Natural(frameHeight),
+
     title: title,
     vao: vao,
     meshStorage: storage,
@@ -193,6 +234,11 @@ proc initKea*(
     window: window,
     drawables: @[]
   )
+
+  window.setWindowUserPointer(cast[pointer](result))
+
+  discard window.setWindowSizeCallback(windowSizeCallback)
+  discard window.setFramebufferSizeCallback(framebufferSizeCallback)
 
 proc uploadMesh(mesh: Mesh) =
   let vertices = mesh.vertices
@@ -339,38 +385,28 @@ proc released*(input: Input, key: Key): bool =
   not input.kea.currentKeys[key] and input.kea.previousKeys[key]
 
 proc render*(kea: Kea) =
+  if kea.frameWidth == 0 or kea.frameHeight == 0:
+    return
+
   glClearColor(0.1, 0.1, 0.1, 1.0)
   glClear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT)
 
   glUseProgram(kea.shaderProgram)
   glBindVertexArray(kea.vao)
 
+  let aspect = float32(kea.frameWidth) / float32(kea.frameHeight)
+
+  let view = kea.camera.view
+  let proj = kea.camera.proj(aspect)
+
+  glUniformMatrix4fv(kea.viewLocation, 1, true, addr view[0][0])
+  glUniformMatrix4fv(kea.projLocation, 1, true, addr proj[0][0])
+
   for drawable in kea.drawables:
     let mesh = drawable.mesh
     let model = drawable.transform.matrix
-    let view = kea.camera.view
-    let proj = kea.camera.proj(float32(kea.width) / float32(kea.height))
 
-    glUniformMatrix4fv(
-      kea.modelLocation,
-      1,
-      true,
-      addr model[0][0]
-    )
-
-    glUniformMatrix4fv(
-      kea.viewLocation,
-      1,
-      true,
-      addr view[0][0]
-    )
-
-    glUniformMatrix4fv(
-      kea.projLocation,
-      1,
-      true,
-      addr proj[0][0]
-    )
+    glUniformMatrix4fv(kea.modelLocation, 1, true, addr model[0][0])
 
     glDrawElementsBaseVertex(
       GL_TRIANGLES,
