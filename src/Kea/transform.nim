@@ -49,7 +49,7 @@ proc rotation*(transform: var Transform): var Vec3 =
 proc rotation*(transform: Transform): Vec3 =
   transform.rotation
   
-proc matrix*(transform: Transform): Mat4 =
+proc matrix*(transform: var Transform): Mat4 =
   if not transform.dirty: 
     return transform.cachedMatrix
 
@@ -94,4 +94,7 @@ proc matrix*(transform: Transform): Mat4 =
       [0.0, 0.0, 0.0, 1.0],
     ]
 
-  trans.multiply(rot).multiply(scale)
+  transform.cachedMatrix = trans.multiply(rot).multiply(scale)
+  transform.dirty = false
+    
+  transform.cachedMatrix
