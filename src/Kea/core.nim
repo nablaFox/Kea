@@ -1,4 +1,4 @@
-import transform, math, material, keys, shaders
+import transform, math, material, keys, shaders, camera
 import nimgl/[glfw, opengl]
 
 type
@@ -53,6 +53,10 @@ type
     vao: GLuint
     shaderProgram: GLuint
     modelLocation: GLint
+    viewLocation: GLint
+    projLocation: GLint
+
+    camera*: Camera
 
     window: GLFWWindow
 
@@ -160,6 +164,12 @@ proc initKea*(
 
   let modelLocation = glGetUniformLocation(shaderProgram, "model")
 
+  let viewLocation = glGetUniformLocation(shaderProgram, "view")
+
+  let projLocation = glGetUniformLocation(shaderProgram, "proj")
+
+  let camera = camera(Perspective)
+
   let storage = MeshStorage(
     vertexBuffer: vertexBuffer,
     indexBuffer: indexBuffer,
@@ -177,6 +187,9 @@ proc initKea*(
     meshStorage: storage,
     shaderProgram: shaderProgram,
     modelLocation: modelLocation,
+    viewLocation: viewLocation,
+    projLocation: projLocation,
+    camera: camera,
     window: window,
     drawables: @[]
   )
@@ -289,10 +302,13 @@ proc add*(
     material
   )
 
+proc transform*(drawable: Drawable): var Transform =
+  drawable.transform
+
 proc position*(drawable: Drawable): var Vec3 =
   drawable.transform.position
 
-proc moved*(drawable: Drawable): Vec3 = 
+proc positioned*(drawable: Drawable): Vec3 = 
   let transform = drawable.transform
   transform.position
 
@@ -332,12 +348,28 @@ proc render*(kea: Kea) =
   for drawable in kea.drawables:
     let mesh = drawable.mesh
     let model = drawable.transform.matrix
+    let view = kea.camera.view
+    let proj = kea.camera.proj(float32(kea.width) / float32(kea.height))
 
     glUniformMatrix4fv(
       kea.modelLocation,
       1,
       true,
       addr model[0][0]
+    )
+
+    glUniformMatrix4fv(
+      kea.viewLocation,
+      1,
+      true,
+      addr view[0][0]
+    )
+
+    glUniformMatrix4fv(
+      kea.projLocation,
+      1,
+      true,
+      addr proj[0][0]
     )
 
     glDrawElementsBaseVertex(

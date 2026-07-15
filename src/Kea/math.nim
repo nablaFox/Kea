@@ -15,7 +15,11 @@ proc `*=`*[C: static int](v: var Vec[C], scalar: float32) =
   for i in 0..<C:
     v[i] *= scalar
 
-proc multiply*[R, N, C: static int](
+proc `*`*[C: static int](v: Vec[C], scalar: float32): Vec[C] =
+  for i in 0..<C:
+    result[i] = v[i] * scalar
+
+proc `*`*[R, N, C: static int](
   a: Matrix[R, N],
   b: Matrix[N, C]
 ): Matrix[R, C] =
@@ -23,6 +27,11 @@ proc multiply*[R, N, C: static int](
     for col in 0..<C:
       for k in 0..<N:
         result[row][col] += a[row][k] * b[k][col]
+
+proc transpose*[R, C: static int](m: Matrix[R, C]): Matrix[C, R] =
+  for row in 0..<R:
+    for col in 0..<C:
+      result[col][row] = m[row][col]
 
 proc identity*[C: static int](): Matrix[C, C] =
   for i in 0..<C:
@@ -40,3 +49,5 @@ template z*(v: Vec3): untyped =
 proc vec2*(value: float32): Vec2 = vec[2](value)
 
 proc vec3*(value: float32): Vec3 = vec[3](value)
+
+const IdentityMatrix4* = identity[4]()
