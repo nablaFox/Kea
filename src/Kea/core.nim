@@ -66,15 +66,16 @@ type
   Kea* = ref KeaObj
 
 proc `=destroy`(kea: KeaObj) =
-  glDeleteProgram(kea.shaderProgram)
+  {.cast(raises: []).}:
+    glDeleteProgram(kea.shaderProgram)
 
-  glDeleteBuffers(1, unsafeAddr kea.meshStorage.vertexBuffer)
-  glDeleteBuffers(1, unsafeAddr kea.meshStorage.indexBuffer)
-  glDeleteVertexArrays(1, unsafeAddr kea.vao)
+    glDeleteBuffers(1, unsafeAddr kea.meshStorage.vertexBuffer)
+    glDeleteBuffers(1, unsafeAddr kea.meshStorage.indexBuffer)
+    glDeleteVertexArrays(1, unsafeAddr kea.vao)
 
-  kea.window.destroyWindow()
+    kea.window.destroyWindow()
 
-  glfwTerminate()
+    glfwTerminate()
 
 proc errorCallback(error: int32, description: cstring) {.cdecl.} =
   echo "GLFW error ", error, ": ", description
