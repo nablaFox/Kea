@@ -6,7 +6,7 @@ export core, keys, material, math, primitives, transform, camera
 when isMainModule:
   let kea = initKea(width = 800, height = 600, title = "demo")
 
-  let triangle = kea.add(Triangle, scale = vec3(0.5), position = [0.0'f32, 0.0, -2.0])
+  let triangle = kea.add(Triangle, position = [0.0'f32, 0.0, -5.0])
 
   for frame in kea.frames:
     if frame.input.pressed(Escape):
@@ -16,5 +16,20 @@ when isMainModule:
 
     if frame.input.down(Space):
       triangle.rotation.y += 0.01
+
+    if frame.input.pressed(Tab):
+      kea.camera.kind = if kea.camera.kind == Perspective: Orthographic else: Perspective
+
+    if frame.input.down(Up):
+      kea.camera.size -= 0.1
+
+    if frame.input.down(Down):
+      kea.camera.size += 0.1
+
+    if frame.input.down(Left):
+      kea.camera.position.x -= 0.1
+
+    if frame.input.down(Right):
+      kea.camera.position.x += 0.1
 
     kea.render()
