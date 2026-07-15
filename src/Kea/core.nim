@@ -38,6 +38,8 @@ type
 
   Frame* = object
     delta*: float32
+    fps*: float32
+    time*: float32
     input*: Input
 
   Input* = object
@@ -348,11 +350,16 @@ proc render*(kea: Kea) =
   kea.window.swapBuffers()
 
 iterator frames*(kea: Kea): Frame =
-  var previousTime = glfwGetTime()
+  let startTime = glfwGetTime()
+
+  var previousTime = startTime
 
   while not kea.window.windowShouldClose:
     let currentTime = glfwGetTime()
+
     let delta = float32(currentTime - previousTime)
+    let time = float32(currentTime - startTime)
+    let fps = if delta > 0.0: 1.0 / delta else: 0.0
 
     previousTime = currentTime
 
@@ -363,4 +370,9 @@ iterator frames*(kea: Kea): Frame =
     for key in Key:
       kea.currentKeys[key] = kea.window.getKey(key.glfwKey) == GLFW_PRESS
 
-    yield Frame(delta: delta, input: Input(kea: kea))
+    yield Frame(
+      delta: delta, 
+      fps: fps,
+      time: time,
+      input: Input(kea: kea)
+    )
