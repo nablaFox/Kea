@@ -1,4 +1,42 @@
 type 
-  Vec2* = array[2, float32]
-  Vec3* = array[3, float32]
-  Mat4* = array[16, float32]
+  Vec*[C: static int] = array[C, float32]
+  Matrix*[R, C: static int] = array[R, Vec[C]]
+
+  Vec2* = Vec[2]
+  Vec3* = Vec[3]
+
+  Mat4* = Matrix[4, 4]
+
+proc vec*[C: static int](value: float32): Vec[C] =
+  for i in 0..<C:
+    result[i] = value
+
+proc `*=`*[C: static int](v: var Vec[C], scalar: float32) =
+  for i in 0..<C:
+    v[i] *= scalar
+
+proc multiply*[R, N, C: static int](
+  a: Matrix[R, N],
+  b: Matrix[N, C]
+): Matrix[R, C] =
+  for row in 0..<R:
+    for col in 0..<C:
+      for k in 0..<N:
+        result[row][col] += a[row][k] * b[k][col]
+
+proc identity*[C: static int](): Matrix[C, C] =
+  for i in 0..<C:
+    result[i][i] = 1.0
+
+template x*(v: Vec2 | Vec3): untyped =
+  v[0]
+
+template y*(v: Vec2 | Vec3): untyped =
+  v[1]
+
+template z*(v: Vec3): untyped =
+  v[2]
+
+proc vec2*(value: float32): Vec2 = vec[2](value)
+
+proc vec3*(value: float32): Vec3 = vec[3](value)

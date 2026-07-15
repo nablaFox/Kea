@@ -50,6 +50,7 @@ type
 
     vao: GLuint
     shaderProgram: GLuint
+    modelLocation: GLint
 
     window: GLFWWindow
 
@@ -154,6 +155,8 @@ proc initKea*(
 
   let shaderProgram = createShaderProgram(defaultVertSource, defaultFragSource)
 
+  let modelLocation = glGetUniformLocation(shaderProgram, "model")
+
   let storage = MeshStorage(
     vertexBuffer: vertexBuffer,
     indexBuffer: indexBuffer,
@@ -170,8 +173,9 @@ proc initKea*(
     vao: vao,
     meshStorage: storage,
     shaderProgram: shaderProgram,
+    modelLocation: modelLocation,
     window: window,
-    drawables: @[],
+    drawables: @[]
   )
 
 proc uploadMesh(mesh: Mesh) =
@@ -252,7 +256,10 @@ proc update*(mesh: Mesh, positions: openArray[Vec3]) =
   mesh.vertices = @[]
 
 proc add*(
-    kea: Kea, mesh: Mesh, transform = IdentityTransform, material = DefaultMaterial
+    kea: Kea, 
+    mesh: Mesh, 
+    transform = IdentityTransform, 
+    material = DefaultMaterial
 ): Drawable =
   doAssert mesh.storage == kea.meshStorage,
     "Mesh belongs to a different Kea instance"
@@ -265,8 +272,43 @@ proc add*(
 
   kea.drawables.add(result)
 
-proc transform*(drawable: Drawable): var Transform =
-  drawable.transform
+proc add*(
+  kea: Kea,
+  mesh: Mesh,
+  material = DefaultMaterial,
+  position = vec3(0.0),
+  rotation = vec3(0.0),
+  scale = vec3(1.0),
+): Drawable =
+  kea.add(
+    mesh,
+    transform(position, rotation, scale),
+    material
+  )
+
+proc position*(drawable: Drawable): var Vec3 =
+  drawable.transform.position
+
+proc moved*(drawable: Drawable): Vec3 = 
+  let transform = drawable.transform
+  transform.position
+
+proc scale*(drawable: Drawable): var Vec3 =
+  drawable.transform.scale
+
+proc scaled*(drawable: Drawable): Vec3 =
+  let transform = drawable.transform
+  transform.scale  
+
+proc rotation*(drawable: Drawable): var Vec3 =
+  drawable.transform.rotation
+
+proc rotated*(drawable: Drawable): Vec3 =
+  let transform = drawable.transform
+  transform.rotation
+
+proc model*(drawable: Drawable): Mat4 =
+  drawable.transform.matrix
 
 proc down*(input: Input, key: Key): bool =
   input.kea.currentKeys[key]
@@ -286,6 +328,14 @@ proc render*(kea: Kea) =
 
   for drawable in kea.drawables:
     let mesh = drawable.mesh
+    let model = drawable.transform.matrix
+
+    glUniformMatrix4fv(
+      kea.modelLocation,
+      1,
+      true,
+      addr model[0][0]
+    )
 
     glDrawElementsBaseVertex(
       GL_TRIANGLES,
@@ -311,6 +361,6 @@ iterator frames*(kea: Kea): Frame =
     kea.previousKeys = kea.currentKeys
 
     for key in Key:
-      kea.currentKeys[key] = kea.window.getKey(int32(key)) == GLFW_PRESS
+      kea.currentKeys[key] = kea.window.getKey(key.glfwKey) == GLFW_PRESS
 
     yield Frame(delta: delta, input: Input(kea: kea))

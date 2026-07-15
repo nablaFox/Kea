@@ -1,5 +1,4 @@
-import core, transform, material
-
+import core, transform, material, math
 type
   Primitive* = enum
     Triangle,
@@ -37,4 +36,20 @@ proc add*(
     kea.createMesh(primitive), 
     transform, 
     material
+  )
+
+proc add*(
+  kea: Kea,
+  primitive: Primitive,
+  material = DefaultMaterial,
+  scale = vec3(1.0),
+  rotation = vec3(0.0),
+  position = vec3(0.0),
+): Drawable = 
+  kea.add(
+    kea.createMesh(primitive), 
+    material,
+    position,
+    rotation,
+    scale
   )
