@@ -4,6 +4,7 @@ type
 
   Vec2* = Vec[2]
   Vec3* = Vec[3]
+  Vec4* = Vec[4]
 
   Mat4* = Matrix[4, 4]
 
@@ -45,6 +46,9 @@ template y*(v: Vec2 | Vec3): untyped =
 
 template z*(v: Vec3): untyped =
   v[2]
+
+template w*(v: Vec4): untyped =
+  v[3]
 
 proc vec2*(value: float32): Vec2 = vec[2](value)
 

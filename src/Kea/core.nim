@@ -1,5 +1,9 @@
-import transform, math, material, keys, shaders, camera
+import transform, math, material, keys, shaders, camera, colors
 import nimgl/[glfw, opengl]
+
+const
+  DefaultVertexCapacity {.intdefine: "kea.vertexCapacity".} = 10_000
+  DefaultIndexCapacity {.intdefine: "kea.indexCapacity".} = 30_000
 
 type
   Vertex* = object
@@ -113,8 +117,8 @@ proc initKea*(
     width: Natural,
     height: Natural,
     title: string,
-    vertexCapacity: Natural = 10_000,
-    indexCapacity: Natural = 30_000,
+    vertexCapacity: Natural = DEFAULT_VERTEX_CAPACITY,
+    indexCapacity: Natural = DEFAULT_INDEX_CAPACITY,
     resizable = false
 ): Kea =
   when not defined(release):
@@ -384,11 +388,11 @@ proc pressed*(input: Input, key: Key): bool =
 proc released*(input: Input, key: Key): bool =
   not input.kea.currentKeys[key] and input.kea.previousKeys[key]
 
-proc render*(kea: Kea) =
+proc render*(kea: Kea, clearColor: Color = [0.1, 0.1, 0.1, 1.0]) =
   if kea.frameWidth == 0 or kea.frameHeight == 0:
     return
 
-  glClearColor(0.1, 0.1, 0.1, 1.0)
+  glClearColor(clearColor.r, clearColor.g, clearColor.b, clearColor.a)
   glClear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT)
 
   glUseProgram(kea.shaderProgram)
