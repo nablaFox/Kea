@@ -63,11 +63,7 @@ proc initMeshStorage*(
     indexCapacity: uint32(indexCapacity),
   )
 
-proc destroy*(storage: MeshStorage) =
-  glDeleteBuffers(1, unsafeAddr storage.vertexBuffer)
-  glDeleteBuffers(1, unsafeAddr storage.indexBuffer)
-
-proc uploadMesh*(mesh: Mesh) = 
+proc uploadMesh(mesh: Mesh) = 
   let vertices = mesh.vertices
   let indices = mesh.indices
 
@@ -92,7 +88,7 @@ proc uploadMesh*(mesh: Mesh) =
     indexData,
   )
 
-proc createMesh*(storage: MeshStorage, vertices: openArray[Vertex], indices: openArray[Index]): Mesh =
+proc new*(storage: MeshStorage, vertices: openArray[Vertex], indices: openArray[Index]): Mesh =
   doAssert storage.nextVertexOffset + uint32(vertices.len) <= storage.vertexCapacity
   doAssert storage.nextIndexOffset + uint32(indices.len) <= storage.indexCapacity
 
@@ -119,6 +115,10 @@ proc update*(mesh: Mesh, vertices: sink seq[Vertex], indices: sink seq[Index]) =
   mesh.indices = indices
 
   uploadMesh(mesh)
+
+proc destroy*(storage: MeshStorage) =
+  glDeleteBuffers(1, unsafeAddr storage.vertexBuffer)
+  glDeleteBuffers(1, unsafeAddr storage.indexBuffer)
 
 proc indices*(mesh: Mesh): lent seq[Index] =
   mesh.indices

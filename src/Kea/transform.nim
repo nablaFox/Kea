@@ -17,7 +17,7 @@ const IdentityTransform* = Transform(
   dirty: false
 )
 
-proc transform*(
+proc new*(
   position: Vec3 = vec3(0.0),
   rotation: Vec3 = vec3(0.0),
   scale: Vec3 = vec3(1.0),

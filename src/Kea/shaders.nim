@@ -1,40 +1,4 @@
-import nimgl/[opengl]
-
-const
-  defaultVertSource* = """
-     #version 330 core
-
-     layout (location = 0) in vec3 position;
-     layout (location = 1) in vec3 normal;
-     layout (location = 2) in vec2 uv;
-
-     uniform mat4 model;
-     uniform mat4 view;
-     uniform mat4 proj;
-     uniform mat3 nmat;
-
-     out vec3 FragPos;
-     out vec3 Normal;
-
-     void main() {
-        gl_Position = proj * view * model * vec4(position, 1.0);
-        FragPos = vec3(model * vec4(position, 1.0));
-        Normal = nmat * normal;
-     }
-  """
-
-  defaultFragSource* = """
-     #version 330 core
-
-     in vec3 FragPos;
-     in vec3 Normal;
-
-     out vec4 FragColor;
-
-     void main() {
-        FragColor = vec4(1.0, 0.5, 0.2, 1.0);
-     }
-  """
+import nimgl/[opengl], mesh
 
 proc compileShader(kind: GLenum, source: string): GLuint =
   result = glCreateShader(kind)
@@ -72,3 +36,39 @@ proc createShaderProgram*(vert: string, frag: string): GLuint =
 
   glDeleteShader(vertexShader)
   glDeleteShader(fragmentShader)
+
+proc createVAO*(meshStorage: MeshStorage): GLuint =
+  glGenVertexArrays(1, addr result)
+  glBindVertexArray(result)
+
+  glBindBuffer(GL_ARRAY_BUFFER, meshStorage.vertexBuffer)
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, meshStorage.indexBuffer)
+
+  glVertexAttribPointer(
+    0'u32, 
+    3, 
+    EGL_FLOAT, 
+    false, 
+    GLsizei(sizeof(Vertex)), nil
+  )
+  glEnableVertexAttribArray(0)
+
+  glVertexAttribPointer(
+    1'u32, 
+    3, 
+    EGL_FLOAT, 
+    false, 
+    GLsizei(sizeof(Vertex)), 
+    cast[pointer](offsetof(Vertex, normal))
+  )
+  glEnableVertexAttribArray(1)
+
+  glVertexAttribPointer(
+    2'u32, 
+    2, 
+    EGL_FLOAT, 
+    false, 
+    GLsizei(sizeof(Vertex)), 
+    cast[pointer](offsetof(Vertex, uv))
+  )
+  glEnableVertexAttribArray(2)

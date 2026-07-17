@@ -6,6 +6,7 @@ type
   Vec3* = Vec[3]
   Vec4* = Vec[4]
 
+  Mat3* = Matrix[3, 3]
   Mat4* = Matrix[4, 4]
 
 proc vec*[C: static int](value: float32): Vec[C] =
@@ -39,8 +40,35 @@ proc transpose*[R, C: static int](m: Matrix[R, C]): Matrix[C, R] =
       result[col][row] = m[row][col]
 
 proc inverse*[C: static int](m: Matrix[C, C]): Matrix[C, C] =
-  # TODO: actually implement matrix inversion
-  identity[C]()
+  var a = m
+  result = identity[C]()
+
+  for col in 0..<C:
+    var pivot = col
+
+    for row in col + 1..<C:
+      if abs(a[row][col]) > abs(a[pivot][col]):
+        pivot = row
+
+    if abs(a[pivot][col]) < 1e-7'f32:
+      raise newException(ValueError, "matrix is singular")
+
+    swap(a[col], a[pivot])
+    swap(result[col], result[pivot])
+
+    let divisor = a[col][col]
+
+    for j in 0..<C:
+      a[col][j] /= divisor
+      result[col][j] /= divisor
+
+    for row in 0..<C:
+      if row != col:
+        let factor = a[row][col]
+
+        for j in 0..<C:
+          a[row][j] -= factor * a[col][j]
+          result[row][j] -= factor * result[col][j]
 
 template x*(v: Vec2 | Vec3 | Vec4): untyped =
   v[0]

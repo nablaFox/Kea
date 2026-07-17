@@ -1,5 +1,4 @@
-import keys
-import nimgl/glfw
+import keys, nimgl/glfw
 
 type
   Input* = object

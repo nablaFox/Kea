@@ -1,5 +1,16 @@
-import transform, math, material, shaders, camera, colors, mesh, drawable, input
-import nimgl/[glfw, opengl]
+import 
+  transform,
+  math,
+  material,
+  camera,
+  colors,
+  mesh,
+  drawable,
+  input,
+  pbr,
+  shaders,
+  primitives,
+  nimgl/[glfw, opengl]
 
 const
   DefaultVertexCapacity {.intdefine: "kea.vertexCapacity".} = 1_000_000
@@ -21,11 +32,8 @@ type
     frameHeight: Natural
 
     vao: GLuint
-    shaderProgram: GLuint
-    modelLocation: GLint
-    viewLocation: GLint
-    projLocation: GLint
-    nmatLocation: GLint
+
+    shader: PBRShader
 
     camera*: Camera
 
@@ -41,7 +49,7 @@ type
 
 proc `=destroy`(kea: KeaObj) =
   {.cast(raises: []).}:
-    glDeleteProgram(kea.shaderProgram)
+    kea.shader.destroy()
 
     kea.meshStorage.destroy()
 
@@ -84,6 +92,7 @@ proc initKea*(
     indexCapacity: Natural = DEFAULT_INDEX_CAPACITY,
     resizable = false,
 ): Kea =
+  # window + context + initializations
   when not defined(release):
     discard glfwSetErrorCallback(errorCallback)
 
@@ -121,90 +130,25 @@ proc initKea*(
 
   glViewport(0, 0, frameWidth, frameHeight)
 
-  var vao: GLuint
+  let meshStorage = initMeshStorage(vertexCapacity, indexCapacity)
 
-  glGenVertexArrays(1, addr vao)
-  glBindVertexArray(vao)
+  let vao = createVAO(meshStorage)
 
-  let storage = initMeshStorage(vertexCapacity, indexCapacity)
+  let camera = camera.new(Perspective)
 
-  glBindBuffer(GL_ARRAY_BUFFER, storage.vertexBuffer)
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, storage.indexBuffer)
-
-  # Position attribute
-  glVertexAttribPointer(
-    0'u32,
-    3,
-    EGL_FLOAT,
-    false,
-    GLsizei(sizeof(Vertex)),
-    nil,
-  )
-
-  glEnableVertexAttribArray(0)
-
-  # Normal attribute
-  glVertexAttribPointer(
-    1'u32,
-    3,
-    EGL_FLOAT,
-    false,
-    GLsizei(sizeof(Vertex)),
-    cast[pointer](offsetof(Vertex, normal)),
-  )
-
-  glEnableVertexAttribArray(1)
-
-  # UV attribute
-  glVertexAttribPointer(
-    2'u32,
-    2,
-    EGL_FLOAT,
-    false,
-    GLsizei(sizeof(Vertex)),
-    cast[pointer](offsetof(Vertex, uv)),
-  )
-
-  glEnableVertexAttribArray(2)
-
-  let shaderProgram =
-    createShaderProgram(defaultVertSource, defaultFragSource)
-
-  let modelLocation =
-    glGetUniformLocation(shaderProgram, "model")
-
-  let viewLocation =
-    glGetUniformLocation(shaderProgram, "view")
-
-  let projLocation =
-    glGetUniformLocation(shaderProgram, "proj")
-
-  let nmatLocation =
-    glGetUniformLocation(shaderProgram, "nmat")
-
-  let camera = camera(Perspective)
+  let shader = pbr.new()
 
   result = Kea(
     width: width,
     height: height,
-
+    title: title,
     frameWidth: Natural(frameWidth),
     frameHeight: Natural(frameHeight),
-
-    title: title,
-
     vao: vao,
-    meshStorage: storage,
-
-    shaderProgram: shaderProgram,
-    modelLocation: modelLocation,
-    viewLocation: viewLocation,
-    projLocation: projLocation,
-    nmatLocation: nmatLocation,
-
+    meshStorage: meshStorage,
+    shader: shader,
     camera: camera,
     window: window,
-
     drawables: @[],
   )
 
@@ -218,13 +162,22 @@ proc createMesh*(
     vertices: openArray[Vertex],
     indices: openArray[Index],
 ): Mesh =
-  mesh.createMesh(kea.meshStorage, vertices, indices)
+  mesh.new(kea.meshStorage, vertices, indices)
+
+proc createMesh*(kea: Kea, primitive: Primitive): Mesh =
+  case primitive
+  of Triangle: 
+    result = createMesh(kea, TriangleMesh.vertices, TriangleMesh.indices)
+  of Sphere:
+    result = createMesh(kea, SphereMesh.vertices, SphereMesh.indices)
+  else:
+    discard
 
 proc add*(
     kea: Kea, 
     mesh: Mesh, 
     transform = IdentityTransform, 
-    material = DefaultMaterial
+    material = Default
 ): Drawable =
   doAssert mesh.storage == kea.meshStorage, "Mesh belongs to a different Kea instance"
 
@@ -242,11 +195,11 @@ proc add*(
   position: Vec3 = vec3(0.0),
   rotation: Vec3 = vec3(0.0),
   scale: Vec3 = vec3(1.0),
-  material = DefaultMaterial,
+  material = Default,
 ): Drawable =
   kea.add(
     mesh,
-    transform(position, rotation, scale),
+    transform.new(position, rotation, scale),
     material
   )
 
@@ -260,7 +213,7 @@ proc add*(
   pitch: float32 = 0.0,
   roll: float32 = 0.0,
   scale: float32 = 1.0,
-  material = DefaultMaterial,
+  material = Default,
 ): Drawable =
   kea.add(
     mesh,
@@ -270,31 +223,69 @@ proc add*(
     material
   )
 
-proc render*(kea: Kea, clearColor: Color = [0.1, 0.1, 0.1, 1.0]) =
+proc add*(
+    kea: Kea,
+    primitive: Primitive,
+    transform = IdentityTransform,
+    material = Default,
+): Drawable =
+  kea.add(
+    kea.createMesh(primitive), 
+    transform, 
+    material
+  )
+
+proc add*(
+  kea: Kea,
+  primitive: Primitive,
+  scale: Vec3 = vec3(1.0),
+  rotation: Vec3 = vec3(0.0),
+  position: Vec3 = vec3(0.0),
+  material = Default,
+): Drawable = 
+  kea.add(
+    kea.createMesh(primitive), 
+    transform.new(position, rotation, scale),
+    material
+  )
+
+proc add*(
+  kea: Kea,
+  primitive: Primitive,
+  x: float32 = 0.0,
+  y: float32 = 0.0,
+  z: float32 = 0.0,
+  yaw: float32 = 0.0,
+  pitch: float32 = 0.0,
+  roll: float32 = 0.0,
+  scale: float32 = 1.0,
+  material = Default,
+): Drawable =
+  kea.add(
+    kea.createMesh(primitive),
+    position = [x, y, z],
+    rotation = [pitch, yaw, roll],
+    scale = [scale, scale, scale],
+    material = material
+  )
+
+proc render*(kea: Kea, clear: Color = [0.1, 0.1, 0.1, 1.0]) =
   if kea.frameWidth == 0 or kea.frameHeight == 0:
     return
 
-  glClearColor(clearColor.r, clearColor.g, clearColor.b, clearColor.a)
+  glClearColor(clear.r, clear.g, clear.b, clear.a)
+
   glClear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT)
 
-  glUseProgram(kea.shaderProgram)
-  glBindVertexArray(kea.vao)
+  kea.shader.use()
 
-  let aspect = float32(kea.frameWidth) / float32(kea.frameHeight)
-
-  let view = kea.camera.view
-  let proj = kea.camera.proj(aspect)
-
-  glUniformMatrix4fv(kea.viewLocation, 1, true, addr view[0][0])
-  glUniformMatrix4fv(kea.projLocation, 1, true, addr proj[0][0])
+  kea.shader.bindCamera(
+    kea.camera, 
+    float32(kea.frameWidth) / float32(kea.frameHeight)
+  )
 
   for drawable in kea.drawables:
-    let model = drawable.transform.matrix
-    let nmat = model.inverse.transpose
-
-    glUniformMatrix4fv(kea.modelLocation, 1, true, addr model[0][0])
-    glUniformMatrix4fv(kea.nmatLocation, 1, true, addr nmat[0][0])
-
+    kea.shader.bindDrawable(drawable)
     drawable.mesh.draw()
 
   kea.window.swapBuffers()

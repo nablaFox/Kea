@@ -1,5 +1,4 @@
-import std/math
-import transform, math
+import std/math, transform, math
 
 type 
   CameraKind* = enum
@@ -14,7 +13,7 @@ type
     far*: float32
     size*: float32
 
-proc camera*(kind: CameraKind, fov = 60.0'f32, near = 0.1'f32, far = 100.0'f32, size = 10.0'f32): Camera =
+proc new*(kind: CameraKind, fov = 60.0'f32, near = 0.1'f32, far = 100.0'f32, size = 10.0'f32): Camera =
   Camera(
     transform: IdentityTransform,
     kind: kind,
@@ -27,7 +26,7 @@ proc camera*(kind: CameraKind, fov = 60.0'f32, near = 0.1'f32, far = 100.0'f32, 
 proc view*(camera: Camera): Mat4 = 
   let rotTransposed = camera.transform.rotMatrix.transpose
 
-  let transInverted = transform(position = camera.transform.position * -1.0).transMatrix
+  let transInverted = transform.new(position = camera.transform.position * -1.0).transMatrix
 
   rotTransposed * transInverted
 

@@ -5,9 +5,9 @@ and professional studio.
 
 Features:
 
-- BDRF with Cook-Torrance specular and lambertian diffuse
-- HDR
-- Gamma correction
+- BDRF with Cook-Torrance specular and lambertian diffuse (ok)
+- HDR (ok)
+- Gamma correction (ok)
 - Area light
 - Dynamic shadows
 - Planar reflections
