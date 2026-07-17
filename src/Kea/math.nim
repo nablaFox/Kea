@@ -29,22 +29,26 @@ proc `*`*[R, N, C: static int](
       for k in 0..<N:
         result[row][col] += a[row][k] * b[k][col]
 
+proc identity*[C: static int](): Matrix[C, C] =
+  for i in 0..<C:
+    result[i][i] = 1.0
+
 proc transpose*[R, C: static int](m: Matrix[R, C]): Matrix[C, R] =
   for row in 0..<R:
     for col in 0..<C:
       result[col][row] = m[row][col]
 
-proc identity*[C: static int](): Matrix[C, C] =
-  for i in 0..<C:
-    result[i][i] = 1.0
+proc inverse*[C: static int](m: Matrix[C, C]): Matrix[C, C] =
+  # TODO: actually implement matrix inversion
+  identity[C]()
 
-template x*(v: Vec2 | Vec3): untyped =
+template x*(v: Vec2 | Vec3 | Vec4): untyped =
   v[0]
 
-template y*(v: Vec2 | Vec3): untyped =
+template y*(v: Vec2 | Vec3 | Vec4): untyped =
   v[1]
 
-template z*(v: Vec3): untyped =
+template z*(v: Vec3 | Vec4): untyped =
   v[2]
 
 template w*(v: Vec4): untyped =

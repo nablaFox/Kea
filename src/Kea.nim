@@ -9,7 +9,8 @@ import
     camera, 
     drawable, 
     mesh, 
-    input
+    input,
+    colors
   ], 
   std/math
 
@@ -23,7 +24,8 @@ export
   camera, 
   drawable, 
   mesh, 
-  input
+  input,
+  colors
 
 when isMainModule:
   let kea = initKea(width = 800, height = 600, title = "demo")
@@ -54,4 +56,4 @@ when isMainModule:
     if frame.input.down(Right):
       kea.camera.position.x += 0.1
 
-    kea.render()
+    kea.render(clearColor = Black)

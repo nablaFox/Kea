@@ -27,6 +27,7 @@ Resources:
 - https://pbr-book.org/4ed/contents
 - https://google.github.io/filament/Filament.md.html
 - https://blog.selfshadow.com/publications/s2017-shading-course/imageworks/s2017_pbs_imageworks_slides_v2.pdf
+- http://www.lighthouse3d.com/tutorials/glsl-tutorial/the-normal-matrix/
 
 ## Usage
 

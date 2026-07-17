@@ -11,14 +11,23 @@ const
      uniform mat4 model;
      uniform mat4 view;
      uniform mat4 proj;
+     uniform mat3 nmat;
+
+     out vec3 FragPos;
+     out vec3 Normal;
 
      void main() {
         gl_Position = proj * view * model * vec4(position, 1.0);
+        FragPos = vec3(model * vec4(position, 1.0));
+        Normal = nmat * normal;
      }
   """
 
   defaultFragSource* = """
      #version 330 core
+
+     in vec3 FragPos;
+     in vec3 Normal;
 
      out vec4 FragColor;
 

@@ -25,6 +25,7 @@ type
     modelLocation: GLint
     viewLocation: GLint
     projLocation: GLint
+    nmatLocation: GLint
 
     camera*: Camera
 
@@ -178,6 +179,9 @@ proc initKea*(
   let projLocation =
     glGetUniformLocation(shaderProgram, "proj")
 
+  let nmatLocation =
+    glGetUniformLocation(shaderProgram, "nmat")
+
   let camera = camera(Perspective)
 
   result = Kea(
@@ -196,6 +200,7 @@ proc initKea*(
     modelLocation: modelLocation,
     viewLocation: viewLocation,
     projLocation: projLocation,
+    nmatLocation: nmatLocation,
 
     camera: camera,
     window: window,
@@ -285,8 +290,10 @@ proc render*(kea: Kea, clearColor: Color = [0.1, 0.1, 0.1, 1.0]) =
 
   for drawable in kea.drawables:
     let model = drawable.transform.matrix
+    let nmat = model.inverse.transpose
 
     glUniformMatrix4fv(kea.modelLocation, 1, true, addr model[0][0])
+    glUniformMatrix4fv(kea.nmatLocation, 1, true, addr nmat[0][0])
 
     drawable.mesh.draw()
 
