@@ -1,4 +1,4 @@
-import nimgl/[opengl], mesh
+import nimgl/opengl
 
 proc compileShader(kind: GLenum, source: string): GLuint =
   result = glCreateShader(kind)
@@ -36,39 +36,3 @@ proc createShaderProgram*(vert: string, frag: string): GLuint =
 
   glDeleteShader(vertexShader)
   glDeleteShader(fragmentShader)
-
-proc createVAO*(meshStorage: MeshStorage): GLuint =
-  glGenVertexArrays(1, addr result)
-  glBindVertexArray(result)
-
-  glBindBuffer(GL_ARRAY_BUFFER, meshStorage.vertexBuffer)
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, meshStorage.indexBuffer)
-
-  glVertexAttribPointer(
-    0'u32, 
-    3, 
-    EGL_FLOAT, 
-    false, 
-    GLsizei(sizeof(Vertex)), nil
-  )
-  glEnableVertexAttribArray(0)
-
-  glVertexAttribPointer(
-    1'u32, 
-    3, 
-    EGL_FLOAT, 
-    false, 
-    GLsizei(sizeof(Vertex)), 
-    cast[pointer](offsetof(Vertex, normal))
-  )
-  glEnableVertexAttribArray(1)
-
-  glVertexAttribPointer(
-    2'u32, 
-    2, 
-    EGL_FLOAT, 
-    false, 
-    GLsizei(sizeof(Vertex)), 
-    cast[pointer](offsetof(Vertex, uv))
-  )
-  glEnableVertexAttribArray(2)

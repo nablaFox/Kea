@@ -1,4 +1,4 @@
-import shaders, material, math, camera, drawable, nimgl/[opengl]
+import shaders, material, math, camera, drawable, ltc, nimgl/opengl
 
 const
   VertSource = """
@@ -33,6 +33,9 @@ uniform vec3 eye;
 uniform vec3 albedo;
 uniform float metallic;
 uniform float roughness;
+
+uniform sampler2D ltcMatrix;
+uniform sampler2D ltcAmplitude;
 
 out vec4 FragColor;
 
@@ -130,6 +133,8 @@ type PBRShader* = object
   roughness: GLint
   metallic: GLint
   albedo: GLint 
+  ltcMatrix: GLint
+  ltcAmplitude: GLint
 
 proc new*(): PBRShader =
   result.program = createShaderProgram(VertSource, FragSource)
@@ -143,6 +148,16 @@ proc new*(): PBRShader =
   result.albedo = glGetUniformLocation(result.program, "albedo")
   result.roughness = glGetUniformLocation(result.program, "roughness")
   result.metallic = glGetUniformLocation(result.program, "metallic")
+
+  result.ltcMatrix = glGetUniformLocation(result.program, "ltcMatrix")
+  result.ltcAmplitude = glGetUniformLocation(result.program, "ltcAmplitude")
+
+  glUseProgram(result.program)
+
+  glUniform1i(result.ltcMatrix, ltc.MatrixUnit)
+  glUniform1i(result.ltcAmplitude, ltc.AmplitudeUnit)
+
+  glUseProgram(0)
 
 proc use*(shader: PBRShader) =
   glUseProgram(shader.program)
@@ -164,14 +179,14 @@ proc bindDrawable*(shader: PBRShader, drawable: Drawable) =
   let model = drawable.model
 
   let nmat: Mat3 = block:
-    let m = model.inverse.transpose
-    var matrix: Mat3
+    var mat = model.inverse.transpose
+    var nmat: Mat3
 
     for row in 0..<3:
       for col in 0..<3:
-        matrix[row][col] = m[row][col]
+        nmat[row][col] = mat[row][col]
 
-    matrix
+    nmat
 
   glUniform3fv(shader.albedo, 1, addr material.albedo[0])
   glUniform1f(shader.roughness, material.roughness)

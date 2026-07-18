@@ -1,5 +1,4 @@
-import math
-import nimgl/opengl
+import nimgl/opengl, math
 
 type
   Vertex* = object
@@ -10,8 +9,10 @@ type
   Index* = uint32
 
   MeshStorage* = ref object
-    vertexBuffer*: GLuint
-    indexBuffer*: GLuint
+    vao: GLuint
+
+    vertexBuffer: GLuint
+    indexBuffer: GLuint
 
     nextVertexOffset: uint32
     nextIndexOffset: uint32
@@ -56,14 +57,52 @@ proc initMeshStorage*(
     GL_DYNAMIC_DRAW,
   )
 
-  MeshStorage(
+  var vao: GLuint
+
+  glGenVertexArrays(1, addr vao)
+  glBindVertexArray(vao)
+
+  glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer)
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer)
+
+  glVertexAttribPointer(
+    0'u32, 
+    3, 
+    EGL_FLOAT, 
+    false, 
+    GLsizei(sizeof(Vertex)), nil
+  )
+  glEnableVertexAttribArray(0)
+
+  glVertexAttribPointer(
+    1'u32, 
+    3, 
+    EGL_FLOAT, 
+    false, 
+    GLsizei(sizeof(Vertex)), 
+    cast[pointer](offsetof(Vertex, normal))
+  )
+  glEnableVertexAttribArray(1)
+
+  glVertexAttribPointer(
+    2'u32, 
+    2, 
+    EGL_FLOAT, 
+    false, 
+    GLsizei(sizeof(Vertex)), 
+    cast[pointer](offsetof(Vertex, uv))
+  )
+  glEnableVertexAttribArray(2)
+
+  result = MeshStorage(
+    vao: vao,
     vertexBuffer: vertexBuffer,
     indexBuffer: indexBuffer,
     vertexCapacity: uint32(vertexCapacity),
     indexCapacity: uint32(indexCapacity),
   )
 
-proc uploadMesh(mesh: Mesh) = 
+proc upload(mesh: Mesh) = 
   let vertices = mesh.vertices
   let indices = mesh.indices
 
@@ -105,7 +144,7 @@ proc new*(storage: MeshStorage, vertices: openArray[Vertex], indices: openArray[
   storage.nextVertexOffset += uint32(vertices.len)
   storage.nextIndexOffset += uint32(indices.len)
 
-  uploadMesh(result)
+  upload(result)
 
 proc update*(mesh: Mesh, vertices: sink seq[Vertex], indices: sink seq[Index]) =
   doAssert uint32(vertices.len) <= mesh.vertexCapacity
@@ -114,11 +153,11 @@ proc update*(mesh: Mesh, vertices: sink seq[Vertex], indices: sink seq[Index]) =
   mesh.vertices = vertices
   mesh.indices = indices
 
-  uploadMesh(mesh)
+  upload(mesh)
 
 proc destroy*(storage: MeshStorage) =
-  glDeleteBuffers(1, unsafeAddr storage.vertexBuffer)
-  glDeleteBuffers(1, unsafeAddr storage.indexBuffer)
+  glDeleteBuffers(1, addr storage.vertexBuffer)
+  glDeleteBuffers(1, addr storage.indexBuffer)
 
 proc indices*(mesh: Mesh): lent seq[Index] =
   mesh.indices
@@ -129,12 +168,12 @@ proc vertices*(mesh: Mesh): lent seq[Vertex] =
 proc `vertices=`*(mesh: Mesh, vertices: sink seq[Vertex]) =
   doAssert uint32(vertices.len) <= mesh.vertexCapacity
   mesh.vertices = vertices
-  uploadMesh(mesh)
+  upload(mesh)
 
 proc `indices=`*(mesh: Mesh, indices: sink seq[Index]) =
   doAssert uint32(indices.len) <= mesh.indexCapacity
   mesh.indices = indices
-  uploadMesh(mesh)
+  upload(mesh)
 
 proc update*(mesh: Mesh, positions: openArray[Vec3]) =
   # TODO: recalculate new vertices with new normals

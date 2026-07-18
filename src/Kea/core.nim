@@ -8,8 +8,8 @@ import
   drawable,
   input,
   pbr,
-  shaders,
   primitives,
+  ltc,
   nimgl/[glfw, opengl]
 
 const
@@ -31,8 +31,6 @@ type
     frameWidth: Natural
     frameHeight: Natural
 
-    vao: GLuint
-
     shader: PBRShader
 
     camera*: Camera
@@ -43,6 +41,8 @@ type
 
     drawables: seq[Drawable]
 
+    ltc: LtcTextures
+
     input: Input
 
   Kea* = ref KeaObj
@@ -52,8 +52,6 @@ proc `=destroy`(kea: KeaObj) =
     kea.shader.destroy()
 
     kea.meshStorage.destroy()
-
-    glDeleteVertexArrays(1, unsafeAddr kea.vao)
 
     kea.window.destroyWindow()
 
@@ -92,7 +90,6 @@ proc initKea*(
     indexCapacity: Natural = DEFAULT_INDEX_CAPACITY,
     resizable = false,
 ): Kea =
-  # window + context + initializations
   when not defined(release):
     discard glfwSetErrorCallback(errorCallback)
 
@@ -132,11 +129,11 @@ proc initKea*(
 
   let meshStorage = initMeshStorage(vertexCapacity, indexCapacity)
 
-  let vao = createVAO(meshStorage)
-
   let camera = camera.new(Perspective)
 
   let shader = pbr.new()
+
+  let ltc = ltc.new()
 
   result = Kea(
     width: width,
@@ -144,11 +141,11 @@ proc initKea*(
     title: title,
     frameWidth: Natural(frameWidth),
     frameHeight: Natural(frameHeight),
-    vao: vao,
     meshStorage: meshStorage,
     shader: shader,
     camera: camera,
     window: window,
+    ltc: ltc,
     drawables: @[],
   )
 
@@ -179,6 +176,8 @@ proc add*(
     transform = IdentityTransform, 
     material = Default
 ): Drawable =
+  doAssert mesh != nil, "Cannot add a nil mesh"
+  doAssert mesh.storage != nil, "Mesh has no storage"
   doAssert mesh.storage == kea.meshStorage, "Mesh belongs to a different Kea instance"
 
   result = Drawable(
@@ -276,6 +275,8 @@ proc render*(kea: Kea, clear: Color = [0.1, 0.1, 0.1, 1.0]) =
   glClearColor(clear.r, clear.g, clear.b, clear.a)
 
   glClear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT)
+
+  kea.ltc.bindTextures()
 
   kea.shader.use()
 
