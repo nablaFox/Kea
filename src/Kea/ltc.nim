@@ -1,4 +1,4 @@
-import std/os, nimgl/opengl, texture
+import std/os, std/math, nimgl/opengl, texture
 
 type LtcTextures* = object
   matrix*: Texture
@@ -8,31 +8,16 @@ const
   MatrixUnit* = 0
   AmplitudeUnit* = 1
 
+  Resolution* = 64
+
   DataDir = currentSourcePath().parentDir / "data" / "ltc"
 
-  BytesPerTexel = 4 * sizeof(float32)
-
-  MatrixData = staticRead(DataDir / "matrix.bin")
-  AmplitudeData = staticRead(DataDir / "amplitude.bin")
-
-  MatrixTexels = MatrixData.len div BytesPerTexel
-  AmplitudeTexels = AmplitudeData.len div BytesPerTexel
-
-  Resolution = block:
-    var side = 0
-
-    while (side + 1) * (side + 1) <= MatrixTexels:
-      inc side
-
-    doAssert side * side == MatrixTexels,
-      "LTC texture data must contain a square number of texels"
-
-    side
+  MatrixTab = staticRead(DataDir / "matrix.bin")
+  AmplitudeTab = staticRead(DataDir / "amplitude.bin")
 
 static:
-  doAssert MatrixData.len mod BytesPerTexel == 0
-  doAssert AmplitudeData.len mod BytesPerTexel == 0
-  doAssert MatrixTexels == AmplitudeTexels
+  doAssert MatrixTab.len == Resolution * Resolution * 4 * sizeof(float32)
+  doAssert AmplitudeTab.len == Resolution * Resolution * 2 * sizeof(float32)
 
 proc new*(): LtcTextures =
   const options = TextureOptions(
@@ -43,7 +28,7 @@ proc new*(): LtcTextures =
   )
 
   result.matrix = texture.new(
-    MatrixData,
+    MatrixTab,
     Resolution,
     Resolution,
     Rgba32Float,
@@ -51,7 +36,7 @@ proc new*(): LtcTextures =
   )
 
   result.amplitude = texture.new(
-    AmplitudeData,
+    AmplitudeTab,
     Resolution,
     Resolution,
     Rgba32Float,

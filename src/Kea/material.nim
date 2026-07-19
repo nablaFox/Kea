@@ -13,7 +13,7 @@ const Default* = Material(
 )
 
 const Red* = Material(
-  albedo: [1.0, 0.0, 0.0, 1.0],
+  albedo: Red,
   roughness: 0.5,
   metallic: 0.0
 )

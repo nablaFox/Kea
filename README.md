@@ -34,6 +34,7 @@ Area Light & dynamic shadows:
 - https://hal.science/hal-01458129v1/document
 - https://cdn.iiit.ac.in/cdn/cvit.iiit.ac.in/images/ConferencePapers/2022/Bringing_ggx.pdf
 - https://research.nvidia.com/sites/default/files/pubs/2018-05_Combining-Analytic-Direct//I3D2018_combining.pdf
+- https://advances.realtimerendering.com/s2016/s2016_ltc_fresnel.pdf
 
 Others:
 

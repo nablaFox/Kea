@@ -158,6 +158,7 @@ proc update*(mesh: Mesh, vertices: sink seq[Vertex], indices: sink seq[Index]) =
 proc destroy*(storage: MeshStorage) =
   glDeleteBuffers(1, addr storage.vertexBuffer)
   glDeleteBuffers(1, addr storage.indexBuffer)
+  glDeleteVertexArrays(1, addr storage.vao)
 
 proc indices*(mesh: Mesh): lent seq[Index] =
   mesh.indices
