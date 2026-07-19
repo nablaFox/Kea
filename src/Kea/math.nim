@@ -87,3 +87,10 @@ proc vec2*(value: float32): Vec2 = vec[2](value)
 proc vec3*(value: float32): Vec3 = vec[3](value)
 
 const IdentityMatrix4* = identity[4]()
+
+proc normalMatrix*(model: Mat4): Mat3 =
+  let mat = model.inverse.transpose
+
+  for row in 0..<3:
+    for col in 0..<3:
+      result[row][col] = mat[row][col]  

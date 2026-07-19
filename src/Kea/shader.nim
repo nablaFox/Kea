@@ -1,6 +1,6 @@
-import nimgl/opengl
+import nimgl/opengl, math
 
-proc compileShader(kind: GLenum, source: string): GLuint =
+proc compile(kind: GLenum, source: string): GLuint =
   result = glCreateShader(kind)
 
   let cSource = source.cstring
@@ -16,9 +16,9 @@ proc compileShader(kind: GLenum, source: string): GLuint =
     glGetShaderInfoLog(result, 512, nil, log.cstring)
     quit("Shader compilation failed:\n" & log)
 
-proc createShaderProgram*(vert: string, frag: string): GLuint =
-  let vertexShader = compileShader(GL_VERTEX_SHADER, vert)
-  let fragmentShader = compileShader(GL_FRAGMENT_SHADER, frag)
+proc createProgram*(vert: string, frag: string): GLuint =
+  let vertexShader = compile(GL_VERTEX_SHADER, vert)
+  let fragmentShader = compile(GL_FRAGMENT_SHADER, frag)
 
   result = glCreateProgram()
 
@@ -36,3 +36,28 @@ proc createShaderProgram*(vert: string, frag: string): GLuint =
 
   glDeleteShader(vertexShader)
   glDeleteShader(fragmentShader)
+
+proc setUniform*(location: GLint, value: float32) =
+  glUniform1f(location, value)
+
+proc setUniform*(location: GLint, value: Vec3) =
+  glUniform3fv(location, 1, addr value[0])
+
+proc setUniform*(location: GLint, value: Vec4) =
+  glUniform4fv(location, 1, addr value[0])
+
+proc setUniform*(location: GLint, value: Mat4) =
+  glUniformMatrix4fv(
+    location,
+    1,
+    true,
+    addr value[0][0]
+  )
+
+proc setUniform*(location: GLint, value: Mat3) = 
+  glUniformMatrix3fv(
+    location,
+    1,
+    true,
+    addr value[0][0]
+  ) 

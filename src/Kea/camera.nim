@@ -15,7 +15,7 @@ type
 
 proc new*(kind: CameraKind, fov = 60.0'f32, near = 0.1'f32, far = 100.0'f32, size = 10.0'f32): Camera =
   Camera(
-    transform: IdentityTransform,
+    transform: Identity,
     kind: kind,
     fov: fov,
     near: near,

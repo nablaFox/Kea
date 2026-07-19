@@ -2,12 +2,12 @@ import
   Kea/[
     core, 
     keys, 
-    material, 
+    pbr,
+    renderer, 
     math, 
     primitives, 
     transform, 
     camera, 
-    drawable, 
     mesh, 
     input,
     colors
@@ -17,12 +17,12 @@ import
 export 
   core, 
   keys, 
-  material, 
+  renderer, 
   math, 
   primitives, 
   transform, 
   camera, 
-  drawable, 
+  pbr,
   mesh, 
   input,
   colors
@@ -30,9 +30,9 @@ export
 when isMainModule:
   let kea = initKea(width = 800, height = 600, title = "demo")
 
-  let triangle = kea.add(Triangle, z = -4.5, material = Red)  
+  let triangle = kea.pbr.add(Triangle, Red, z = -4.5)
 
-  discard kea.add(Sphere, z = -4.0, y = 1.5, x = 1.5, scale = 0.1)
+  discard kea.pbr.add(Sphere, White, z = -4.0, y = 1.5, x = 1.5, scale = 0.1)
 
   for frame in kea.frames:
     if frame.input.pressed(Escape):

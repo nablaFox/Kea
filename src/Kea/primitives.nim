@@ -73,3 +73,12 @@ const SphereMesh* = block:
       ]
 
   geometry
+
+proc mesh*(primitive: Primitive, storage: MeshStorage): Mesh =
+  case primitive
+  of Triangle: 
+    result = mesh.new(storage, TriangleMesh.vertices, TriangleMesh.indices)
+  of Sphere:
+    result = mesh.new(storage, SphereMesh.vertices, SphereMesh.indices)
+  else:
+    discard

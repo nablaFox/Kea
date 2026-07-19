@@ -1,29 +1,7 @@
-import shaders, material, math, camera, drawable, ltc, nimgl/opengl
+import renderer, mesh, math
 
 const
-  VertSource = """
-#version 330 core
-
-layout (location = 0) in vec3 position;
-layout (location = 1) in vec3 normal;
-layout (location = 2) in vec2 uv;
-
-uniform mat4 model;
-uniform mat4 view;
-uniform mat4 proj;
-uniform mat3 nmat;
-
-out vec3 WorldPos;
-out vec3 Normal;
-
-void main() {
-  gl_Position = proj * view * model * vec4(position, 1.0);
-  WorldPos = vec3(model * vec4(position, 1.0));
-  Normal = nmat * normal;
-}
-"""
-
-  FragSource = """
+  PbrFrag = """
 #version 330 core
 
 in vec3 WorldPos;
@@ -123,74 +101,30 @@ void main() {
 }
 """
 
-type PBRShader* = object
-  program: GLuint
-  model: GLint
-  view: GLint
-  proj: GLint
-  nmat: GLint
-  eye: GLint
-  roughness: GLint
-  metallic: GLint
-  albedo: GLint 
-  ltcMatrix: GLint
-  ltcAmplitude: GLint
+type PBRMaterial* = tuple[
+  albedo: Vec3,
+  roughness: float32,
+  metallic: float32,
+  # ltcMatrix: GLuint,
+  # ltcAmplitude: GLuint
+]
 
-proc new*(): PBRShader =
-  result.program = createShaderProgram(VertSource, FragSource)
+type PBRRenderer* = Renderer[PBRMaterial]
 
-  result.model = glGetUniformLocation(result.program, "model")
-  result.view = glGetUniformLocation(result.program, "view")
-  result.proj = glGetUniformLocation(result.program, "proj")
-  result.nmat = glGetUniformLocation(result.program, "nmat")
-  result.eye = glGetUniformLocation(result.program, "eye")
-  
-  result.albedo = glGetUniformLocation(result.program, "albedo")
-  result.roughness = glGetUniformLocation(result.program, "roughness")
-  result.metallic = glGetUniformLocation(result.program, "metallic")
+proc new*(storage: MeshStorage): PBRRenderer = 
+  renderer.new[PBRMaterial](
+    frag = PbrFrag, 
+    storage,
+  )
 
-  result.ltcMatrix = glGetUniformLocation(result.program, "ltcMatrix")
-  result.ltcAmplitude = glGetUniformLocation(result.program, "ltcAmplitude")
+const Red*: PBRMaterial = (
+  albedo: [1.0, 0.0, 0.0],
+  roughness: 0.5,
+  metallic: 0.0
+)
 
-  glUseProgram(result.program)
-
-  glUniform1i(result.ltcMatrix, ltc.MatrixUnit)
-  glUniform1i(result.ltcAmplitude, ltc.AmplitudeUnit)
-
-  glUseProgram(0)
-
-proc use*(shader: PBRShader) =
-  glUseProgram(shader.program)
-
-proc destroy*(shader: PBRShader) =
-  glDeleteProgram(shader.program)
-
-proc bindCamera*(shader: PBRShader, camera: Camera, aspect: float32) =
-  let eye = camera.positioned
-  let view = camera.view
-  let proj = camera.proj(aspect)
-
-  glUniform3fv(shader.eye, 1, addr eye[0])
-  glUniformMatrix4fv(shader.view, 1, true, addr view[0][0])
-  glUniformMatrix4fv(shader.proj, 1, true, addr proj[0][0])
-
-proc bindDrawable*(shader: PBRShader, drawable: Drawable) =
-  let material = drawable.material
-  let model = drawable.model
-
-  let nmat: Mat3 = block:
-    var mat = model.inverse.transpose
-    var nmat: Mat3
-
-    for row in 0..<3:
-      for col in 0..<3:
-        nmat[row][col] = mat[row][col]
-
-    nmat
-
-  glUniform3fv(shader.albedo, 1, addr material.albedo[0])
-  glUniform1f(shader.roughness, material.roughness)
-  glUniform1f(shader.metallic, material.metallic)
-
-  glUniformMatrix3fv(shader.nmat, 1, true, addr nmat[0][0])
-  glUniformMatrix4fv(shader.model, 1, true, addr model[0][0])
+const White*: PBRMaterial = (
+  albedo: [1.0, 1.0, 1.0],
+  roughness: 0.5,
+  metallic: 0.0
+)

@@ -9,7 +9,7 @@ type
     cachedMatrix: Mat4
     dirty: bool
 
-const IdentityTransform* = Transform(
+const Identity* = Transform(
   cachedMatrix: IdentityMatrix4,
   position: vec3(0.0),
   rotation: vec3(0.0),

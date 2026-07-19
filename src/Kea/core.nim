@@ -1,14 +1,10 @@
 import 
-  transform,
-  math,
-  material,
+  renderer,
   camera,
   colors,
   mesh,
-  drawable,
   input,
   pbr,
-  primitives,
   ltc,
   nimgl/[glfw, opengl]
 
@@ -31,15 +27,15 @@ type
     frameWidth: Natural
     frameHeight: Natural
 
-    shader: PBRShader
+    passes: seq[RenderPass]
+
+    pbr*: PBRRenderer
 
     camera*: Camera
 
     window: GLFWWindow
 
-    meshStorage: MeshStorage
-
-    drawables: seq[Drawable]
+    storage: MeshStorage
 
     ltc: LtcTextures
 
@@ -47,13 +43,16 @@ type
 
   Kea* = ref KeaObj
 
-proc `=destroy`(kea: KeaObj) =
+proc `=destroy`(kea: var KeaObj) =
   {.cast(raises: []).}:
-    kea.shader.destroy()
+    kea.passes.setLen(0) # ensure renderers deallocate before context ends
 
-    kea.meshStorage.destroy()
+    kea.pbr = nil
 
-    kea.window.destroyWindow()
+    kea.storage.destroy()
+
+    if kea.window != nil:
+      kea.window.destroyWindow()
 
     glfwTerminate()
 
@@ -127,11 +126,16 @@ proc initKea*(
 
   glViewport(0, 0, frameWidth, frameHeight)
 
-  let meshStorage = initMeshStorage(vertexCapacity, indexCapacity)
+  let storage = initMeshStorage(vertexCapacity, indexCapacity)
 
   let camera = camera.new(Perspective)
 
-  let shader = pbr.new()
+  let pbr = pbr.new(storage)
+
+  let pbrPass = RenderPass(
+    render: proc(ctx: RenderContext) =
+      pbr.render(ctx)
+  )
 
   let ltc = ltc.new()
 
@@ -141,12 +145,12 @@ proc initKea*(
     title: title,
     frameWidth: Natural(frameWidth),
     frameHeight: Natural(frameHeight),
-    meshStorage: meshStorage,
-    shader: shader,
+    storage: storage,
+    pbr: pbr,
     camera: camera,
     window: window,
     ltc: ltc,
-    drawables: @[],
+    passes: @[pbrPass]
   )
 
   window.setWindowUserPointer(cast[pointer](result))
@@ -154,119 +158,19 @@ proc initKea*(
   discard window.setWindowSizeCallback(windowSizeCallback)
   discard window.setFramebufferSizeCallback(framebufferSizeCallback)
 
-proc createMesh*(
+proc newMesh*(
     kea: Kea,
     vertices: openArray[Vertex],
     indices: openArray[Index],
 ): Mesh =
-  mesh.new(kea.meshStorage, vertices, indices)
+  mesh.new(kea.storage, vertices, indices)
 
-proc createMesh*(kea: Kea, primitive: Primitive): Mesh =
-  case primitive
-  of Triangle: 
-    result = createMesh(kea, TriangleMesh.vertices, TriangleMesh.indices)
-  of Sphere:
-    result = createMesh(kea, SphereMesh.vertices, SphereMesh.indices)
-  else:
-    discard
-
-proc add*(
-    kea: Kea, 
-    mesh: Mesh, 
-    transform = IdentityTransform, 
-    material = Default
-): Drawable =
-  doAssert mesh != nil, "Cannot add a nil mesh"
-  doAssert mesh.storage != nil, "Mesh has no storage"
-  doAssert mesh.storage == kea.meshStorage, "Mesh belongs to a different Kea instance"
-
-  result = Drawable(
-    transform: transform, 
-    material: material, 
-    mesh: mesh
-  )
-
-  kea.drawables.add(result)
-
-proc add*(
+proc newRenderer*[T](
   kea: Kea,
-  mesh: Mesh,
-  position: Vec3 = vec3(0.0),
-  rotation: Vec3 = vec3(0.0),
-  scale: Vec3 = vec3(1.0),
-  material = Default,
-): Drawable =
-  kea.add(
-    mesh,
-    transform.new(position, rotation, scale),
-    material
-  )
-
-proc add*(
-  kea: Kea,
-  mesh: Mesh,
-  x: float32 = 0.0,
-  y: float32 = 0.0,
-  z: float32 = 0.0,
-  yaw: float32 = 0.0,
-  pitch: float32 = 0.0,
-  roll: float32 = 0.0,
-  scale: float32 = 1.0,
-  material = Default,
-): Drawable =
-  kea.add(
-    mesh,
-    position = [x, y, z],
-    rotation = [pitch, yaw, roll],
-    scale = [scale, scale, scale],
-    material
-  )
-
-proc add*(
-    kea: Kea,
-    primitive: Primitive,
-    transform = IdentityTransform,
-    material = Default,
-): Drawable =
-  kea.add(
-    kea.createMesh(primitive), 
-    transform, 
-    material
-  )
-
-proc add*(
-  kea: Kea,
-  primitive: Primitive,
-  scale: Vec3 = vec3(1.0),
-  rotation: Vec3 = vec3(0.0),
-  position: Vec3 = vec3(0.0),
-  material = Default,
-): Drawable = 
-  kea.add(
-    kea.createMesh(primitive), 
-    transform.new(position, rotation, scale),
-    material
-  )
-
-proc add*(
-  kea: Kea,
-  primitive: Primitive,
-  x: float32 = 0.0,
-  y: float32 = 0.0,
-  z: float32 = 0.0,
-  yaw: float32 = 0.0,
-  pitch: float32 = 0.0,
-  roll: float32 = 0.0,
-  scale: float32 = 1.0,
-  material = Default,
-): Drawable =
-  kea.add(
-    kea.createMesh(primitive),
-    position = [x, y, z],
-    rotation = [pitch, yaw, roll],
-    scale = [scale, scale, scale],
-    material = material
-  )
+  frag: string,
+  vert = DefaultVert,
+): Renderer[T] =
+  renderer.new(vert = vert, frag = frag, kea.storage)
 
 proc render*(kea: Kea, clear: Color = [0.1, 0.1, 0.1, 1.0]) =
   if kea.frameWidth == 0 or kea.frameHeight == 0:
@@ -276,18 +180,16 @@ proc render*(kea: Kea, clear: Color = [0.1, 0.1, 0.1, 1.0]) =
 
   glClear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT)
 
-  kea.ltc.bindTextures()
+  let aspect = kea.frameWidth.float32 / kea.frameHeight.float32
 
-  kea.shader.use()
-
-  kea.shader.bindCamera(
-    kea.camera, 
-    float32(kea.frameWidth) / float32(kea.frameHeight)
+  let ctx = RenderContext(
+    view: kea.camera.view,
+    proj: kea.camera.proj(aspect),
+    eye: kea.camera.positioned
   )
 
-  for drawable in kea.drawables:
-    kea.shader.bindDrawable(drawable)
-    drawable.mesh.draw()
+  for pass in kea.passes:
+    pass.render(ctx)
 
   kea.window.swapBuffers()
 
