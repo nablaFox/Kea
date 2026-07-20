@@ -5,6 +5,7 @@ const SpherePrecision* {.intdefine: "kea.spherePrecision".} = 64
 type
   Primitive* = enum
     Triangle,
+    Quad,
     Sphere
     Cube
     Pyramid,
@@ -20,6 +21,19 @@ const TriangleMesh* = Geometry(
     Vertex(position: [1.0, -1.0, 0.0], normal: [0.0, 0.0, 1.0], uv: [1.0, 0.0])
   ],
   indices: @[0'u32, 1'u32, 2'u32],
+)
+
+const QuadMesh* = Geometry(
+  vertices: @[
+    Vertex(position: [-1.0,  1.0, 0.0], normal: [0.0, 0.0, 1.0], uv: [0.0, 1.0]),
+    Vertex(position: [-1.0, -1.0, 0.0], normal: [0.0, 0.0, 1.0], uv: [0.0, 0.0]),
+    Vertex(position: [ 1.0, -1.0, 0.0], normal: [0.0, 0.0, 1.0], uv: [1.0, 0.0]),
+    Vertex(position: [ 1.0,  1.0, 0.0], normal: [0.0, 0.0, 1.0], uv: [1.0, 1.0])
+  ],
+  indices: @[
+    0'u32, 1'u32, 2'u32,
+    0'u32, 2'u32, 3'u32
+  ],
 )
 
 const SphereMesh* = block:
@@ -80,5 +94,7 @@ proc mesh*(primitive: Primitive, storage: MeshStorage): Mesh =
     result = mesh.new(storage, TriangleMesh.vertices, TriangleMesh.indices)
   of Sphere:
     result = mesh.new(storage, SphereMesh.vertices, SphereMesh.indices)
+  of Quad:
+    result = mesh.new(storage, QuadMesh.vertices, QuadMesh.indices)
   else:
     discard

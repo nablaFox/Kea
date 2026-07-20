@@ -80,7 +80,7 @@ proc initMeshStorage*(
     EGL_FLOAT, 
     false, 
     GLsizei(sizeof(Vertex)), 
-    cast[pointer](offsetof(Vertex, normal))
+    cast[pointer](offsetOf(Vertex, normal))
   )
   glEnableVertexAttribArray(1)
 
@@ -90,7 +90,7 @@ proc initMeshStorage*(
     EGL_FLOAT, 
     false, 
     GLsizei(sizeof(Vertex)), 
-    cast[pointer](offsetof(Vertex, uv))
+    cast[pointer](offsetOf(Vertex, uv))
   )
   glEnableVertexAttribArray(2)
 

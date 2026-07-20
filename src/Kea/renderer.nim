@@ -1,17 +1,31 @@
 import nimgl/opengl, mesh, shader, transform, math, primitives
 
-const DefaultVert* = """
+const VertexHeader = """
 #version 330 core
 
 layout (location = 0) in vec3 position;
 layout (location = 1) in vec3 normal;
 layout (location = 2) in vec2 uv;
 
+const float PI = 3.14159265359;
+
 uniform mat4 model;
 uniform mat4 view;
 uniform mat4 proj;
 uniform mat3 nmat;
 
+"""
+
+const FragHeader = """
+#version 330 core
+
+const float PI = 3.14159265359;
+
+uniform vec3 eye;
+
+"""
+
+const DefaultVert* = """
 out vec3 WorldPos;
 out vec3 Normal;
 
@@ -57,10 +71,17 @@ proc `=destroy`[T](r: var RendererObj[T]) =
       glDeleteProgram(r.program)
       r.program = 0
 
-proc new*[T](frag: string, storage: MeshStorage, vert = DefaultVert): Renderer[T] = 
+    r.drawables = @[]
+    r.materialLocs = @[]
+    r.storage = nil
+
+proc new*[T](storage: MeshStorage, frag: string, vert = DefaultVert): Renderer[T] = 
   new(result)
 
-  result.program = shader.createProgram(vert = vert, frag = frag)
+  result.program = shader.createProgram(
+    vert = VertexHeader & vert, 
+    frag = FragHeader & frag
+  )
 
   result.storage = storage
 
@@ -92,7 +113,7 @@ proc render*[T](renderer: Renderer[T], ctx: RenderContext) =
   setUniform(renderer.eyeLoc, ctx.eye)
 
   for drawable in renderer.drawables:
-    let model = drawable.transform.matrix
+    let model = drawable.transform.model
     let nmat = model.normalMatrix
 
     setUniform(renderer.modelLoc, model)
@@ -123,20 +144,6 @@ proc add*[T](
   renderer: Renderer[T],
   mesh: Mesh,
   material: T,
-  position: Vec3 = vec3(0.0),
-  rotation: Vec3 = vec3(0.0),
-  scale: Vec3 = vec3(1.0),
-): Drawable[T] =
-  renderer.add(
-    mesh,
-    material,
-    transform.new(position, rotation, scale),
-  )
-
-proc add*[T](
-  renderer: Renderer[T],
-  mesh: Mesh,
-  material: T,
   x: float32 = 0.0,
   y: float32 = 0.0,
   z: float32 = 0.0,
@@ -147,10 +154,16 @@ proc add*[T](
 ): Drawable[T] =
   renderer.add(
     mesh,
-    position = [x, y, z],
-    rotation = [pitch, yaw, roll],
-    scale = [scale, scale, scale],
-    material
+    material,
+    transform.new(
+      x = x,
+      y = y,
+      z = z,
+      pitch = pitch,
+      yaw = yaw,
+      roll = roll,
+      scale = scale
+    ),
   )
 
 proc add*[T](
@@ -169,20 +182,6 @@ proc add*[T](
   renderer: Renderer[T],
   primitive: Primitive,
   material: T,
-  scale: Vec3 = vec3(1.0),
-  rotation: Vec3 = vec3(0.0),
-  position: Vec3 = vec3(0.0),
-): Drawable[T] = 
-  renderer.add(
-    primitive.mesh(renderer.storage),
-    material,
-    transform.new(position, rotation, scale),
-  )
-
-proc add*[T](
-  renderer: Renderer[T],
-  primitive: Primitive,
-  material: T,
   x: float32 = 0.0,
   y: float32 = 0.0,
   z: float32 = 0.0,
@@ -193,10 +192,16 @@ proc add*[T](
 ): Drawable[T] =
   renderer.add(
     primitive.mesh(renderer.storage),
-    position = [x, y, z],
-    rotation = [pitch, yaw, roll],
-    scale = [scale, scale, scale],
-    material = material
+    material,
+    transform.new(
+      x = x,
+      y = y,
+      z = z,
+      pitch = pitch,
+      yaw = yaw,
+      roll = roll,
+      scale = scale
+    ),
   )
 
 proc transform*(drawable: Drawable): var Transform =

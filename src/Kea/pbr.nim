@@ -2,12 +2,9 @@ import renderer, mesh, math
 
 const
   PbrFrag = """
-#version 330 core
-
 in vec3 WorldPos;
 in vec3 Normal;
 
-uniform vec3 eye;
 uniform vec3 albedo;
 uniform float metallic;
 uniform float roughness;
@@ -17,10 +14,8 @@ uniform sampler2D ltcAmplitude;
 
 out vec4 FragColor;
 
-const float PI = 3.14159265359;
-
 // TEMP
-vec3 lightPos = vec3(1.5, 1.5, -4.0);
+vec3 lightPos = vec3(0.0, 8.0, 0.0);
 vec3 lightColor = vec3(23.47, 21.31, 20.79);
 
 vec3 fresnelSchlick(vec3 H, vec3 V, vec3 F0) {
@@ -113,8 +108,8 @@ type PBRRenderer* = Renderer[PBRMaterial]
 
 proc new*(storage: MeshStorage): PBRRenderer = 
   renderer.new[PBRMaterial](
-    frag = PbrFrag, 
     storage,
+    frag = PbrFrag, 
   )
 
 const Red*: PBRMaterial = (

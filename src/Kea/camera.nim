@@ -1,5 +1,9 @@
 import std/math, transform, math
 
+const WorldForward*: Vec3 = [0.0, 0.0, -1.0]
+const WorldUp*: Vec3 = [0.0, 1.0, 0.0]
+const WorldRight*: Vec3 = [1.0, 0.0, 0.0]
+
 type 
   CameraKind* = enum
     Perspective
@@ -85,3 +89,12 @@ proc rotation*(camera: var Camera): var Vec3 =
 proc rotated*(camera: Camera): Vec3 =
   let transform = camera.transform
   transform.rotation
+
+proc forward*(camera: Camera): Vec3 =
+  camera.transform.rotMatrix3 * WorldForward
+
+proc right*(camera: Camera): Vec3 =
+  camera.transform.rotMatrix3 * WorldRight
+
+proc up*(camera: Camera): Vec3 =
+  camera.transform.rotMatrix3 * WorldUp

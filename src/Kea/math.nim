@@ -13,13 +13,41 @@ proc vec*[C: static int](value: float32): Vec[C] =
   for i in 0..<C:
     result[i] = value
 
+proc `*`*[C: static int](v: Vec[C], scalar: float32): Vec[C] =
+  for i in 0..<C:
+    result[i] = v[i] * scalar
+
 proc `*=`*[C: static int](v: var Vec[C], scalar: float32) =
   for i in 0..<C:
     v[i] *= scalar
 
-proc `*`*[C: static int](v: Vec[C], scalar: float32): Vec[C] =
+proc `+`*[C: static int](a: Vec[C], b: Vec[C]): Vec[C] =
   for i in 0..<C:
-    result[i] = v[i] * scalar
+    result[i] = a[i] + b[i]
+
+proc `+=`*[C: static int](a: var Vec[C], b: Vec[C]) =
+  for i in 0..<C:
+    a[i] += b[i]
+
+proc `-`*[C: static int](a: Vec[C], b: Vec[C]): Vec[C] =
+  for i in 0..<C:
+    result[i] = a[i] - b[i]
+
+proc `-=`*[C: static int](a: var Vec[C], b: Vec[C]) =
+  for i in 0..<C:
+    a[i] -= b[i]
+
+proc `/`*[C: static int](v: Vec[C], scalar: float32): Vec[C] =
+  for i in 0..<C:
+    result[i] = v[i] / scalar
+
+proc `/=`*[C: static int](v: var Vec[C], scalar: float32) =
+  for i in 0..<C:
+    v[i] /= scalar
+
+proc dot*[C: static int](a: Vec[C], b: Vec[C]): float32 =
+  for i in 0..<C:
+    result += a[i] * b[i]
 
 proc `*`*[R, N, C: static int](
   a: Matrix[R, N],
@@ -29,6 +57,11 @@ proc `*`*[R, N, C: static int](
     for col in 0..<C:
       for k in 0..<N:
         result[row][col] += a[row][k] * b[k][col]
+
+proc `*`*[R, C: static int](m: Matrix[R, C], v: Vec[C]): Vec[R] =
+  for row in 0..<R:
+    for col in 0..<C:
+      result[row] += m[row][col] * v[col]
 
 proc identity*[C: static int](): Matrix[C, C] =
   for i in 0..<C:
