@@ -208,7 +208,8 @@ proc add*[T](
   frag: string,
   vert = DefaultVert,
   material: T = (),
-  transform = Identity
+  transform = Identity,
+  topology = Triangles
 ): Drawable[T] =
   let renderer = renderer.new[T](
     kea.storage,
@@ -221,7 +222,12 @@ proc add*[T](
       renderer.render(ctx)
   )
 
-  renderer.add(mesh, material, transform)
+  renderer.add(
+    mesh, 
+    material, 
+    transform, 
+    topology
+  )
 
 proc add*[T](
   kea: Kea,
@@ -235,7 +241,8 @@ proc add*[T](
   yaw: float32 = 0.0,
   pitch: float32 = 0.0,
   roll: float32 = 0.0,
-  scale: float32 = 1.0
+  scale: float32 = 1.0,
+  topology = Triangles
 ): Drawable[T] = 
   kea.add(
     mesh = mesh,
@@ -250,7 +257,8 @@ proc add*[T](
       yaw = yaw,
       roll = roll,
       scale = scale
-    )
+    ),
+    topology = topology
   )
 
 proc add*[T](
@@ -259,14 +267,16 @@ proc add*[T](
   frag: string,
   vert = DefaultVert,
   material: T = (),
-  transform = Identity
+  transform = Identity,
+  topology = Triangles
 ): Drawable[T] =
   kea.add(
     mesh = primitive.mesh(kea.storage), 
     frag = frag, 
     vert = vert, 
     material = material,
-    transform = transform
+    transform = transform,
+    topology = topology
   )
 
 proc add*[T](
@@ -281,7 +291,8 @@ proc add*[T](
   yaw: float32 = 0.0,
   pitch: float32 = 0.0,
   roll: float32 = 0.0,
-  scale: float32 = 1.0
+  scale: float32 = 1.0,
+  topology = Triangles
 ): Drawable[T] =
   kea.add(
     mesh = primitive.mesh(kea.storage), 
@@ -296,7 +307,8 @@ proc add*[T](
       yaw = yaw,
       roll = roll,
       scale = scale
-    )
+    ),
+    topology = topology
   )
 
 proc updateOrbitCamera*(kea: Kea, frame: Frame) =

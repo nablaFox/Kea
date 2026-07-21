@@ -64,6 +64,7 @@ type
     material*: T
     mesh*: Mesh
     transform*: Transform
+    topology*: Topology
 
 proc `=destroy`[T](r: var RendererObj[T]) =
   {.cast(raises: []).}:
@@ -121,13 +122,14 @@ proc render*[T](renderer: Renderer[T], ctx: RenderContext) =
 
     renderer.bindMaterial(drawable.material)
 
-    drawable.mesh.draw()
+    drawable.mesh.draw(topology = drawable.topology)
 
 proc add*[T](
   renderer: Renderer[T],
   mesh: Mesh,
   material: T,
-  transform = Identity
+  transform = Identity,
+  topology = Triangles,
 ): Drawable[T] =
   doAssert mesh != nil, "Cannot add a nil mesh"
   doAssert mesh.storage != nil, "Mesh has no storage"
@@ -136,6 +138,7 @@ proc add*[T](
     mesh: mesh,
     material: material,
     transform: transform,
+    topology: topology
   )
 
   renderer.drawables.add(result)
@@ -151,6 +154,7 @@ proc add*[T](
   pitch: float32 = 0.0,
   roll: float32 = 0.0,
   scale: float32 = 1.0,
+  topology = Triangles,
 ): Drawable[T] =
   renderer.add(
     mesh,
@@ -164,6 +168,7 @@ proc add*[T](
       roll = roll,
       scale = scale
     ),
+    topology,
   )
 
 proc add*[T](
@@ -171,11 +176,13 @@ proc add*[T](
     primitive: Primitive,
     material: T,
     transform = Identity,
+    topology = Triangles,
 ): Drawable[T] =
   renderer.add(
     mesh.new(renderer.storage, primitive), 
     material,
     transform, 
+    topology,
   )
 
 proc add*[T](
@@ -189,6 +196,7 @@ proc add*[T](
   pitch: float32 = 0.0,
   roll: float32 = 0.0,
   scale: float32 = 1.0,
+  topology = Triangles,
 ): Drawable[T] =
   renderer.add(
     primitive.mesh(renderer.storage),
@@ -202,6 +210,7 @@ proc add*[T](
       roll = roll,
       scale = scale
     ),
+    topology,
   )
 
 proc transform*(drawable: Drawable): var Transform =

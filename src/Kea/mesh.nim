@@ -8,6 +8,9 @@ type
 
   Index* = uint32
 
+  Topology* = enum
+    Triangles, Lines, Points
+
   MeshStorage* = ref object
     vao: GLuint
 
@@ -180,9 +183,15 @@ proc update*(mesh: Mesh, positions: openArray[Vec3]) =
   # TODO: recalculate new vertices with new normals
   mesh.vertices = @[]
 
-proc draw*(mesh: Mesh) = 
+proc glMode(topology: Topology): GLenum =
+  case topology
+  of Triangles: GL_TRIANGLES
+  of Lines: GL_LINES
+  of Points: GL_POINTS
+
+proc draw*(mesh: Mesh, topology: Topology) = 
   glDrawElementsBaseVertex(
-    GL_TRIANGLES,
+    topology.glMode,
     GLsizei(mesh.indices.len),
     GL_UNSIGNED_INT,
     cast[pointer](mesh.indexOffset * uint32(sizeof(Index))),

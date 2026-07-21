@@ -4,11 +4,9 @@ const SpherePrecision* {.intdefine: "kea.spherePrecision".} = 64
 
 type
   Primitive* = enum
-    Triangle,
-    Quad,
+    Triangle
+    Quad
     Sphere
-    Cube
-    Pyramid,
 
 type Geometry = object
   vertices*: seq[Vertex]
