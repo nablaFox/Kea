@@ -31,7 +31,8 @@ when isMainModule:
   let kea = initKea(
     width = 800, 
     height = 600, 
-    title = "demo"
+    title = "demo",
+    orbit = orbit.new(target = [0.0'f32, 1.0, 0.0], distance = 4.0)
   )
 
   let sphere = kea.add(
@@ -49,6 +50,8 @@ when isMainModule:
     
       out vec4 FragColor;
 
+      uniform vec4 M;
+
       vec3 palette(float t) {
         t = clamp(t, 0.0, 1.0);
 
@@ -64,17 +67,32 @@ when isMainModule:
         return mix(color, light, smoothstep(0.70, 1.0, t));
       }
 
+      float D0(vec3 wo) {
+        return max(0.0, wo.z) / PI;
+      }
+
       void main() {
-        vec3 direction = normalize(Normal);
+        mat3 inv = inverse(mat3(
+          vec3(M.x, 0.0, M.w),
+          vec3(0.0, M.z, 0.0),
+          vec3(M.y, 0.0, 1.0)
+        ));
+
+        vec3 wi = normalize(Normal);
+
+        vec3 wo = inv * wi;
+
+        float jacobian = determinant(inv) / pow(length(wo), 3);
         
-        float density = max(0, direction.z) / PI;
+        float density = D0(normalize(wo)) * jacobian;
 
         float t = pow(clamp(density * PI, 0.0, 1.0), 0.65);
 
         FragColor = vec4(palette(t), 1.0);
       }
     """,
-    z = 0
+    transform = transform.new(position = kea.orbit.target),
+    material = (M: [1.0'f32, 0.0, 1.0, 0.0])
   )
 
   discard kea.pbr.add(
@@ -90,9 +108,32 @@ when isMainModule:
     pitch = -PI / 2.0
   )
 
+  var component = 0
+
   for frame in kea.frames:
     if frame.keyboard.pressed(Escape):
       break 
+
+    if frame.keyboard.down(One): 
+      component = 0
+
+    if frame.keyboard.down(Two): 
+      component = 1
+    
+    if frame.keyboard.down(Three): 
+      component = 2
+
+    if frame.keyboard.down(Four): 
+      component = 3
+
+    if frame.keyboard.down(Space):
+      sphere.material.M[component] += 0.01
+
+    if frame.keyboard.down(LeftShift):
+      sphere.material.M[component] -= 0.01
+
+    if frame.keyboard.pressed(Tab):
+      sphere.material.M = [1.0'f32, 0.0, 1.0, 0.0]
 
     kea.updateOrbitCamera(frame)
 

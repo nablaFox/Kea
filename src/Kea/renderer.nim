@@ -221,10 +221,10 @@ proc scaled*(drawable: Drawable): Vec3 =
   let transform = drawable.transform
   transform.scale
 
-proc rotation*(drawable: Drawable): var Vec3 =
+proc rotation*(drawable: Drawable): var Mat3 =
   drawable.transform.rotation
 
-proc rotated*(drawable: Drawable): Vec3 =
+proc rotated*(drawable: Drawable): Mat3 =
   let transform = drawable.transform
   transform.rotation
 

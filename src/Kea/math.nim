@@ -65,6 +65,12 @@ proc `*`*[R, N, C: static int](
       for k in 0..<N:
         result[row][col] += a[row][k] * b[k][col]
 
+proc `*=`*[R, N, C: static int](
+  a: var Matrix[R, N],
+  b: Matrix[N, C]
+) =
+  a = a * b
+
 proc `*`*[R, C: static int](m: Matrix[R, C], v: Vec[C]): Vec[R] =
   for row in 0..<R:
     for col in 0..<C:
@@ -125,6 +131,8 @@ template w*(v: Vec4): untyped =
 proc vec2*(value: float32): Vec2 = vec[2](value)
 
 proc vec3*(value: float32): Vec3 = vec[3](value)
+
+proc vec4*(value: float32): Vec4 = vec[4](value)
 
 const Identity3* = identity[3]()
 

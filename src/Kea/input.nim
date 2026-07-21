@@ -9,6 +9,43 @@ type
     Down
     Left
     Right
+    LeftShift
+    A
+    B
+    C
+    D
+    E
+    F
+    G
+    H
+    I
+    J
+    K
+    L
+    M
+    N
+    O
+    P
+    Q
+    R
+    S
+    T
+    U
+    V
+    W
+    X
+    Y
+    Z
+    Zero
+    One
+    Two
+    Three
+    Four
+    Five
+    Six
+    Seven
+    Eight
+    Nine
 
   MouseButton* = enum
     Left
@@ -51,6 +88,43 @@ proc glfwKey*(key: Key): int32 =
   of Down: int32(GLFWKey.Down)
   of Left: int32(GLFWKey.Left)
   of Right: int32(GLFWKey.Right)
+  of LeftShift: int32(GLFWKey.LeftShift)
+  of A: int32(GLFWKey.A)
+  of B: int32(GLFWKey.B)
+  of C: int32(GLFWKey.C)
+  of D: int32(GLFWKey.D)
+  of E: int32(GLFWKey.E)
+  of F: int32(GLFWKey.F)
+  of G: int32(GLFWKey.G)
+  of H: int32(GLFWKey.H)
+  of I: int32(GLFWKey.I)
+  of J: int32(GLFWKey.J)
+  of K: int32(GLFWKey.K)
+  of L: int32(GLFWKey.L)
+  of M: int32(GLFWKey.M)
+  of N: int32(GLFWKey.N)
+  of O: int32(GLFWKey.O)
+  of P: int32(GLFWKey.P)
+  of Q: int32(GLFWKey.Q)
+  of R: int32(GLFWKey.R)
+  of S: int32(GLFWKey.S)
+  of T: int32(GLFWKey.T)
+  of U: int32(GLFWKey.U)
+  of V: int32(GLFWKey.V)
+  of W: int32(GLFWKey.W)
+  of X: int32(GLFWKey.X)
+  of Y: int32(GLFWKey.Y)
+  of Z: int32(GLFWKey.Z) 
+  of Zero: int32(GLFWKey.K0)
+  of One: int32(GLFWKey.K1)
+  of Two: int32(GLFWKey.K2)
+  of Three: int32(GLFWKey.K3)
+  of Four: int32(GLFWKey.K4)
+  of Five: int32(GLFWKey.K5)
+  of Six: int32(GLFWKey.K6)
+  of Seven: int32(GLFWKey.K7)
+  of Eight: int32(GLFWKey.K8)
+  of Nine: int32(GLFWKey.K9)
 
 proc beginFrame*(keyboard: var Keyboard) =
   keyboard.previous = keyboard.current
