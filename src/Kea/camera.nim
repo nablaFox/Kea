@@ -1,5 +1,7 @@
 import std/math, transform, math
 
+const WorldOrigin*: Vec3 = [0.0, 0.0, 0.0]
+const WorldBackward*: Vec3 = [0.0, 0.0, 1.0]
 const WorldForward*: Vec3 = [0.0, 0.0, -1.0]
 const WorldUp*: Vec3 = [0.0, 1.0, 0.0]
 const WorldRight*: Vec3 = [1.0, 0.0, 0.0]
@@ -83,18 +85,18 @@ proc positioned*(camera: Camera): Vec3 =
   let transform = camera.transform
   transform.position
 
-proc rotation*(camera: var Camera): var Vec3 =
+proc rotation*(camera: var Camera): var Mat3 =
   camera.transform.rotation
 
-proc rotated*(camera: Camera): Vec3 =
+proc rotated*(camera: Camera): Mat3 =
   let transform = camera.transform
   transform.rotation
 
 proc forward*(camera: Camera): Vec3 =
-  camera.transform.rotMatrix3 * WorldForward
+  camera.transform.rotation * WorldForward
 
 proc right*(camera: Camera): Vec3 =
-  camera.transform.rotMatrix3 * WorldRight
+  camera.transform.rotation * WorldRight
 
 proc up*(camera: Camera): Vec3 =
-  camera.transform.rotMatrix3 * WorldUp
+  camera.transform.rotation * WorldUp

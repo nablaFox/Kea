@@ -6,6 +6,7 @@ import
   input,
   primitives,
   transform,
+  orbit,
   pbr,
   ltc,
   nimgl/[glfw, opengl]
@@ -40,6 +41,7 @@ type
     pbr*: PBRRenderer
 
     camera*: Camera
+    orbit*: OrbitController
 
     storage: MeshStorage
 
@@ -73,6 +75,7 @@ proc initKea*(
     width: Natural,
     height: Natural,
     title: string,
+    orbit = orbit.new(target = WorldOrigin),
     vertexCapacity: Natural = DefaultVertexCapacity,
     indexCapacity: Natural = DefaultIndexCapacity,
     resizable = false,
@@ -139,6 +142,7 @@ proc initKea*(
     storage: storage,
     pbr: pbr,
     camera: camera,
+    orbit: orbit,
     window: window,
     ltc: ltc,
     passes: @[pbrPass]
@@ -293,6 +297,15 @@ proc add*[T](
       roll = roll,
       scale = scale
     )
+  )
+
+proc updateOrbitCamera*(kea: Kea, frame: Frame) =
+  orbit.update(
+    kea.orbit,
+    kea.camera,
+    frame.delta,
+    kea.mouse,
+    kea.keyboard
   )
 
 proc render*(kea: Kea, clear: Color = [0.1, 0.1, 0.1, 1.0]) =

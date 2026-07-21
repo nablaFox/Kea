@@ -9,7 +9,8 @@ import
     camera, 
     mesh, 
     input,
-    colors
+    colors,
+    orbit
   ], 
   std/math
 
@@ -23,10 +24,15 @@ export
   pbr,
   mesh, 
   input,
-  colors
+  colors,
+  orbit
 
 when isMainModule:
-  let kea = initKea(width = 800, height = 600, title = "demo")
+  let kea = initKea(
+    width = 800, 
+    height = 600, 
+    title = "demo"
+  )
 
   let sphere = kea.add(
     Sphere,
@@ -44,12 +50,18 @@ when isMainModule:
       out vec4 FragColor;
 
       vec3 palette(float t) {
-        vec3 dark = vec3(0.02, 0.04, 0.10);
-        vec3 blue = vec3(0.08, 0.42, 0.72);
-        vec3 teal = vec3(0.15, 0.78, 0.65);
+        t = clamp(t, 0.0, 1.0);
 
-        vec3 low = mix(dark, blue, smoothstep(0.0, 0.65, t));
-        return mix(low, teal, smoothstep(0.55, 1.0, t));
+        vec3 dark   = vec3(0.045, 0.014, 0.070);
+        vec3 purple = vec3(0.250, 0.105, 0.330);
+        vec3 blue   = vec3(0.110, 0.360, 0.550);
+        vec3 teal   = vec3(0.120, 0.650, 0.610);
+        vec3 light  = vec3(0.700, 0.930, 0.820);
+
+        vec3 color = mix(dark, purple, smoothstep(0.0, 0.25, t));
+        color = mix(color, blue, smoothstep(0.20, 0.50, t));
+        color = mix(color, teal, smoothstep(0.45, 0.75, t));
+        return mix(color, light, smoothstep(0.70, 1.0, t));
       }
 
       void main() {
@@ -78,35 +90,10 @@ when isMainModule:
     pitch = -PI / 2.0
   )
 
-  var target = [0.0'f32, 0.0, 0.0]
-  var distance = 10.0
-  var yaw = 0.0'f32
-  var pitch = 0.0'f32
-
   for frame in kea.frames:
     if frame.keyboard.pressed(Escape):
       break 
 
-    if frame.mouse.down(Left):
-      yaw -= frame.mouse.delta.x * frame.delta * 0.5
-      pitch -= frame.mouse.delta.y * frame.delta * 0.5
-
-    if frame.mouse.down(Middle):
-      let right = kea.camera.right
-      let up = kea.camera.up
-
-      target -= right * frame.mouse.delta.x * 0.005
-      target += up * frame.mouse.delta.y * 0.005
-
-    yaw = clamp(yaw, -PI, PI)
-    pitch = clamp(pitch, -PI / 2, 0.0)
-    distance *= 0.85 ^ frame.mouse.scroll.y
-
-    let orbit = transform.new(yaw = yaw, pitch = pitch)
-
-    let offset = orbit.rotMatrix3 * [0.0'f32, 0.0, 1.0]
-
-    kea.camera.position = target + offset * distance
-    kea.camera.rotation = [pitch, yaw, 0.0]
+    kea.updateOrbitCamera(frame)
 
     kea.render(clear = White * 0.8)

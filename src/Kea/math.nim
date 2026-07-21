@@ -1,3 +1,5 @@
+import std/math
+
 type 
   Vec*[C: static int] = array[C, float32]
   Matrix*[R, C: static int] = array[R, Vec[C]]
@@ -48,6 +50,11 @@ proc `/=`*[C: static int](v: var Vec[C], scalar: float32) =
 proc dot*[C: static int](a: Vec[C], b: Vec[C]): float32 =
   for i in 0..<C:
     result += a[i] * b[i]
+
+proc normalize*[C: static int](v: Vec[C]): Vec[C] = 
+  let length = sqrt(dot(v, v))
+
+  if length > 1e-7'f32: v / length else: vec[C](0.0)
 
 proc `*`*[R, N, C: static int](
   a: Matrix[R, N],
@@ -119,7 +126,9 @@ proc vec2*(value: float32): Vec2 = vec[2](value)
 
 proc vec3*(value: float32): Vec3 = vec[3](value)
 
-const IdentityMatrix4* = identity[4]()
+const Identity3* = identity[3]()
+
+const Identity4* = identity[4]()
 
 proc normalMatrix*(model: Mat4): Mat3 =
   let mat = model.inverse.transpose
@@ -127,3 +136,33 @@ proc normalMatrix*(model: Mat4): Mat3 =
   for row in 0..<3:
     for col in 0..<3:
       result[row][col] = mat[row][col]  
+
+proc pitch*(value: float32): Mat3 = 
+  let cp = cos(value)
+  let sp = sin(value)
+
+  [
+    [1.0, 0.0, 0.0],
+    [0.0, cp, -sp],
+    [0.0, sp, cp],
+  ]
+
+proc yaw*(value: float32): Mat3 =
+  let cy = cos(value)
+  let sy = sin(value)
+
+  [
+    [cy, 0.0, sy],
+    [0.0, 1.0, 0.0],
+    [-sy, 0.0, cy],
+  ]
+
+proc roll*(value: float32): Mat3 =
+  let cr = cos(value)
+  let sr = sin(value)
+
+  [
+    [cr, -sr, 0.0],
+    [sr, cr, 0.0],
+    [0.0, 0.0, 1.0],
+  ]
