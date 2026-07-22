@@ -39,6 +39,10 @@ proc `-=`*[C: static int](a: var Vec[C], b: Vec[C]) =
   for i in 0..<C:
     a[i] -= b[i]
 
+proc `-`*[C: static int](v: Vec[C]): Vec[C] =
+  for i in 0..<C:
+    result[i] = -v[i]
+
 proc `/`*[C: static int](v: Vec[C], scalar: float32): Vec[C] =
   for i in 0..<C:
     result[i] = v[i] / scalar
@@ -55,6 +59,16 @@ proc normalize*[C: static int](v: Vec[C]): Vec[C] =
   let length = sqrt(dot(v, v))
 
   if length > 1e-7'f32: v / length else: vec[C](0.0)
+
+proc length*[C: static int](v: Vec[C]): float32 =
+  dot(v, v).sqrt
+
+proc cross*(a, b: Vec3): Vec3 =
+  [
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0],
+  ]
 
 proc `*`*[R, N, C: static int](
   a: Matrix[R, N],
@@ -115,6 +129,12 @@ proc inverse*[C: static int](m: Matrix[C, C]): Matrix[C, C] =
         for j in 0..<C:
           a[row][j] -= factor * a[col][j]
           result[row][j] -= factor * result[col][j]
+
+# TODO: implement in general
+proc det*(m: Mat3): float32 =
+  m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) -
+  m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +
+  m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])
 
 template x*(v: Vec2 | Vec3 | Vec4): untyped =
   v[0]

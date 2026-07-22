@@ -3,6 +3,7 @@ import nimgl/opengl, math
 type
   Vertex* = object
     position*: Vec3
+    color*: Vec3
     normal*: Vec3
     uv*: Vec2
 
@@ -89,13 +90,23 @@ proc initMeshStorage*(
 
   glVertexAttribPointer(
     2'u32, 
+    3, 
+    EGL_FLOAT, 
+    false, 
+    GLsizei(sizeof(Vertex)), 
+    cast[pointer](offsetOf(Vertex, color))
+  )
+  glEnableVertexAttribArray(2)
+
+  glVertexAttribPointer(
+    3'u32, 
     2, 
     EGL_FLOAT, 
     false, 
     GLsizei(sizeof(Vertex)), 
     cast[pointer](offsetOf(Vertex, uv))
   )
-  glEnableVertexAttribArray(2)
+  glEnableVertexAttribArray(3)
 
   result = MeshStorage(
     vao: vao,
@@ -179,8 +190,13 @@ proc `indices=`*(mesh: Mesh, indices: sink seq[Index]) =
   mesh.indices = indices
   upload(mesh)
 
+proc setVertex*(mesh: Mesh, index: Natural, vertex: Vertex) =
+  doAssert index < mesh.vertices.len
+  mesh.vertices[index] = vertex
+  upload(mesh)
+
 proc update*(mesh: Mesh, positions: openArray[Vec3]) =
-  # TODO: recalculate new vertices with new normals
+  # TODO: recompute normals
   mesh.vertices = @[]
 
 proc glMode(topology: Topology): GLenum =

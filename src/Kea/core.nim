@@ -320,11 +320,11 @@ proc updateOrbitCamera*(kea: Kea, frame: Frame) =
     kea.keyboard
   )
 
-proc render*(kea: Kea, clear: Color = [0.1, 0.1, 0.1, 1.0]) =
+proc render*(kea: Kea, clear: Color = [0.1, 0.1, 0.1]) =
   if kea.frameWidth == 0 or kea.frameHeight == 0:
     return
 
-  glClearColor(clear.r, clear.g, clear.b, clear.a)
+  glClearColor(clear.r, clear.g, clear.b, 1.0)
 
   glClear(GL_COLOR_BUFFER_BIT or GL_DEPTH_BUFFER_BIT)
 

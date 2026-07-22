@@ -94,5 +94,3 @@ proc mesh*(primitive: Primitive, storage: MeshStorage): Mesh =
     result = mesh.new(storage, SphereMesh.vertices, SphereMesh.indices)
   of Quad:
     result = mesh.new(storage, QuadMesh.vertices, QuadMesh.indices)
-  else:
-    discard
