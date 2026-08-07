@@ -33,10 +33,19 @@ uniform sampler2D ltcInverseMatrixLut;
 layout(bindless_sampler)
 uniform sampler2D ltcMagnitudeFresnelLut;
 
+struct RectLight {
+  vec3 position;
+  mat3 rotation;
+  vec2 size;
+  vec3 radiance;
+};
+
+uniform RectLight light;
+
 out vec4 FragColor;
 
 // TEMP
-vec3 lightPos = vec3(0.0, 8.0, 0.0);
+vec3 lightPos = light.position;
 vec3 lightColor = vec3(23.47, 21.31, 20.79);
 
 vec3 fresnelSchlick(vec3 H, vec3 V, vec3 F0) {
@@ -117,6 +126,12 @@ void main() {
 }
 """
 
+type RectLight* = object
+  position*: Vec3
+  rotation*: Mat3
+  size*: Vec2
+  radiance*: Vec3
+
 type PBRMaterial* = tuple[
   albedo: Vec3,
   roughness: float32,
@@ -127,8 +142,9 @@ type PBRGlobals* = tuple[
   view: Mat4,
   proj: Mat4,
   eye: Vec3,
+  light: RectLight,
   ltcInverseMatrixLut: ColorTexture,
-  ltcMagnitudeFresnelLut: ColorTexture
+  ltcMagnitudeFresnelLut: ColorTexture,
 ]
 
 type PBRRenderer* = Renderer[PBRGlobals, PBRMaterial]

@@ -97,43 +97,30 @@ proc new*[G, M](
 
   result.storage = storage
 
-  proc uniformLocations[T: tuple](program: GLuint): seq[GLint] =
-    var values: T
+  result.globalLocs = shader.uniformLocations[G](result.program)
+  result.materialLocs = shader.uniformLocations[M](result.program)
 
-    for name, _ in values.fieldPairs:
-      result.add glGetUniformLocation(program, name)
-
-  result.globalLocs = uniformLocations[G](result.program)
-  result.materialLocs = uniformLocations[M](result.program)
-
-  result.modelLoc = glGetUniformLocation(result.program, "model")
-  result.nmatLoc  = glGetUniformLocation(result.program, "nmat")
+  result.modelLoc = shader.uniformLocation(result.program, "model")
+  result.nmatLoc  = shader.uniformLocation(result.program, "nmat")
 
   result.globals = globals
 
 proc render*[G, M](renderer: Renderer[G, M], target: RenderTarget) = 
   target.use()
 
-  proc bindUniforms[T: tuple](locations: openArray[GLint], values: T) =
-    var index = 0
-
-    for _, value in values.fieldPairs:
-      setUniform(locations[index], value)
-      inc index
-
   glUseProgram(renderer.program)
 
-  bindUniforms(renderer.globalLocs, renderer.globals)
+  shader.setUniforms(renderer.globalLocs, renderer.globals)
 
   for item in renderer.items:
     let drawable = item.drawable
     let model = drawable.transform.model
     let nmat = model.normalMatrix
 
-    setUniform(renderer.modelLoc, model)
-    setUniform(renderer.nmatLoc, nmat)
+    shader.setUniform(renderer.modelLoc, model)
+    shader.setUniform(renderer.nmatLoc, nmat)
 
-    bindUniforms(renderer.materialLocs, item.material)
+    shader.setUniforms(renderer.materialLocs, item.material)
 
     drawable.mesh.draw(topology = drawable.topology)
 

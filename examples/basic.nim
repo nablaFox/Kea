@@ -25,6 +25,8 @@ discard kea.add(
   pitch = -PI / 2.0
 )
 
+kea.light.position = [0.0'f32, 8.0, 0.0]
+
 for frame in kea.frames:
   if frame.keyboard.pressed(Escape):
     break 

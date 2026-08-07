@@ -13,7 +13,7 @@ import
     colors,
     orbit
   ], 
-  std/math,
+  std/math as stdmath,
   nimgl/opengl
 
 export 
@@ -21,6 +21,7 @@ export
   core, 
   renderer, 
   math, 
+  stdmath,
   primitives, 
   transform, 
   camera, 

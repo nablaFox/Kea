@@ -33,7 +33,7 @@ type
 
     storage: MeshStorage
 
-    pbr*: PBRRenderer
+    pbr: PBRRenderer
 
   Kea* = ref KeaObj
 
@@ -154,6 +154,9 @@ proc `cursor=`*(kea: Kea, cursor: CursorMode) =
 
 proc cursor*(kea: Kea): CursorMode =
   kea.window.cursorMode
+
+proc `light`*(kea: Kea): var RectLight =
+  kea.pbr.light
 
 iterator frames*(kea: Kea): Frame =
   let startTime = glfwGetTime()
