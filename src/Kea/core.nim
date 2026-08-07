@@ -71,7 +71,7 @@ proc `=destroy`(kea: var KeaObj) =
 
     glfwTerminate()
 
-proc initKea*(
+proc init*(
     width: Natural,
     height: Natural,
     title: string,
@@ -204,6 +204,26 @@ proc newRenderer*[T: tuple](
 
 proc add*[T](
   kea: Kea,
+  renderer: Renderer[T],
+  mesh: Mesh,
+  material: T = (),
+  transform = Identity,
+  topology = Triangles
+): Drawable[T] =
+  kea.passes.add RenderPass(
+    render: proc(ctx: RenderContext) =
+      renderer.render(ctx)
+  )
+
+  renderer.add(
+    mesh, 
+    material, 
+    transform, 
+    topology
+  )
+
+proc add*[T](
+  kea: Kea,
   mesh: Mesh,
   frag: string,
   vert = DefaultVert,
@@ -311,15 +331,6 @@ proc add*[T](
     topology = topology
   )
 
-proc updateOrbitCamera*(kea: Kea, frame: Frame) =
-  orbit.update(
-    kea.orbit,
-    kea.camera,
-    frame.delta,
-    kea.mouse,
-    kea.keyboard
-  )
-
 proc render*(kea: Kea, clear: Color = [0.1, 0.1, 0.1]) =
   if kea.frameWidth == 0 or kea.frameHeight == 0:
     return
@@ -362,6 +373,13 @@ iterator frames*(kea: Kea): Frame =
 
     kea.mouse.update(kea.window)
     kea.keyboard.update(kea.window)
+
+    kea.orbit.update(
+      camera = kea.camera,
+      delta = delta,
+      mouse = kea.mouse,
+      keyboard = kea.keyboard
+    )
 
     yield Frame(
       delta: delta,

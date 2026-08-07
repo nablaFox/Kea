@@ -117,13 +117,6 @@ proc new*[T](storage: MeshStorage, frag: string, vert = DefaultVert): Renderer[T
       glGetUniformLocation(result.program, name)
     )
 
-proc bindMaterial[T](renderer: Renderer[T], material: T) =
-  var index = 0
-
-  for _, value in material.fieldPairs:
-    setUniform(renderer.materialLocs[index], value)
-    inc index
-
 proc render*[T](renderer: Renderer[T], ctx: RenderContext) = 
   glUseProgram(renderer.program)
 
@@ -138,7 +131,11 @@ proc render*[T](renderer: Renderer[T], ctx: RenderContext) =
     setUniform(renderer.modelLoc, model)
     setUniform(renderer.nmatLoc, nmat)
 
-    renderer.bindMaterial(drawable.material)
+    var index = 0
+
+    for _, value in drawable.material.fieldPairs:
+      setUniform(renderer.materialLocs[index], value)
+      inc index
 
     drawable.mesh.draw(topology = drawable.topology)
 

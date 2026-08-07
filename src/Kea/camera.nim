@@ -20,9 +20,9 @@ type
     far*: float32
     size*: float32
 
-proc new*(kind: CameraKind, fov = 60.0'f32, near = 0.1'f32, far = 100.0'f32, size = 10.0'f32): Camera =
+proc new*(kind: CameraKind, fov = 60.0'f32, near = 0.1'f32, far = 100.0'f32, size = 10.0'f32, transform = Identity): Camera =
   Camera(
-    transform: Identity,
+    transform: transform,
     kind: kind,
     fov: fov,
     near: near,

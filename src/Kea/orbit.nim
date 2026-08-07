@@ -1,4 +1,4 @@
-import std/math, math, input, camera
+import std/math, math, input, camera, transform
 
 type OrbitController* = object
   target*: Vec3
@@ -21,7 +21,7 @@ proc new*(
 
 proc update*(
   orbit: var OrbitController, 
-  camera: var Camera, 
+  camera: Camera, 
   delta: float32,
   mouse: Mouse,
   keyboard: Keyboard,
@@ -39,7 +39,13 @@ proc update*(
 
   orbit.distance *= 0.85 ^ mouse.scroll.y
 
+proc camera*(orbit: OrbitController): Camera =
   let rotation = orbit.yaw.yaw * orbit.pitch.pitch
 
-  camera.position = orbit.target + (rotation * WorldBackward) * orbit.distance
-  camera.rotation = rotation
+  camera.new(
+    kind = Perspective,
+    transform = transform.new(
+      position = orbit.target + (rotation * WorldBackward) * orbit.distance,
+      rotation = rotation
+    )
+  )
