@@ -1,4 +1,4 @@
-import nimgl/opengl, math, texture
+import nimgl/opengl, math, texture, colors
 
 proc compile(kind: GLenum, source: string): GLuint =
   result = glCreateShader(kind)

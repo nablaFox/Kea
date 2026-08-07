@@ -78,7 +78,12 @@ proc `=destroy`[G, M](r: var RendererObj[G, M]) =
     r.globalLocs = @[]
     r.storage = nil
 
-proc new*[G, M](storage: MeshStorage, frag: string, vert: string): Renderer[G, M] = 
+proc new*[G, M](
+  storage: MeshStorage, 
+  frag: string, 
+  vert: string,
+  globals = G.default
+): Renderer[G, M] = 
   new(result)
 
   result.program = shader.createProgram(
@@ -99,6 +104,8 @@ proc new*[G, M](storage: MeshStorage, frag: string, vert: string): Renderer[G, M
 
   result.modelLoc = glGetUniformLocation(result.program, "model")
   result.nmatLoc  = glGetUniformLocation(result.program, "nmat")
+
+  result.globals = globals
 
 proc render*[G, M](renderer: Renderer[G, M], target: RenderTarget) = 
   target.use()
@@ -128,7 +135,7 @@ proc render*[G, M](renderer: Renderer[G, M], target: RenderTarget) =
 proc add*[G, M](
   renderer: Renderer[G, M],
   mesh: Mesh,
-  material: M,
+  material = M.default,
   transform = Identity,
   topology = Triangles,
 ): Drawable[M] =
@@ -147,7 +154,7 @@ proc add*[G, M](
 proc add*[G, M](
   renderer: Renderer[G, M],
   mesh: Mesh,
-  material: M,
+  material = M.default,
   x: float32 = 0.0,
   y: float32 = 0.0,
   z: float32 = 0.0,
@@ -175,7 +182,7 @@ proc add*[G, M](
 proc add*[G, M](
     renderer: Renderer[G, M],
     primitive: Primitive,
-    material: M,
+    material = M.default,
     transform = Identity,
     topology = Triangles,
 ): Drawable[M] =
@@ -189,7 +196,7 @@ proc add*[G, M](
 proc add*[G, M](
   renderer: Renderer[G, M],
   primitive: Primitive,
-  material: M,
+  material = M.default,
   x: float32 = 0.0,
   y: float32 = 0.0,
   z: float32 = 0.0,

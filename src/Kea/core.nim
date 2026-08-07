@@ -81,12 +81,19 @@ proc newMesh*(
 ): Mesh =
   mesh.new(kea.storage, vertices, indices)
 
-proc newRenderer*[M, G](
+proc newRenderer*[G, M](
   kea: Kea,
+  material: typedesc[M],
   vert: string,
   frag: string,
-): Renderer[M, G] =
-  renderer.new(kea.storage, vert = vert, frag = frag)
+  globals: G = G.default
+): Renderer[G, M] =
+  renderer.new[G, M](
+    kea.storage, 
+    vert = vert, 
+    frag = frag, 
+    globals = globals
+  )
 
 proc add*(
   kea: Kea,
@@ -141,6 +148,12 @@ proc update*(orbit: var OrbitController, frame: Frame) =
     mouse = frame.mouse, 
     keyboard = frame.keyboard, 
   )
+
+proc `cursor=`*(kea: Kea, cursor: CursorMode) =
+  kea.window.setCursorMode(cursor)
+
+proc cursor*(kea: Kea): CursorMode =
+  kea.window.cursorMode
 
 iterator frames*(kea: Kea): Frame =
   let startTime = glfwGetTime()

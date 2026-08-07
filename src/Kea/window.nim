@@ -12,6 +12,8 @@ type
 
     backbuffer*: RenderTarget[BackBuffer]
 
+    cursorMode*: CursorMode
+
   Window* = ref WindowObj
 
 proc `=destroy`(window: var WindowObj) =
@@ -23,6 +25,7 @@ proc `=destroy`(window: var WindowObj) =
       window.handle = nil
 
 proc setCursorMode*(window: Window, mode: CursorMode) =
+  window.cursorMode = mode
   window.handle.setInputMode(GLFWCursorSpecial, mode.glfwCursorMode)
 
 proc new*(
