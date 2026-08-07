@@ -101,7 +101,7 @@ proc add*(
   material: PBRMaterial,
   transform = Identity,
   topology = Triangles,
-): Drawable[PBRMaterial] =
+): RenderItem[PBRMaterial] =
   kea.pbr.add(
     primitive,
     material,
@@ -121,7 +121,7 @@ proc add*(
   roll: float32 = 0.0,
   scale: float32 = 1.0,
   topology = Triangles,
-): Drawable[PBRMaterial] =
+): RenderItem[PBRMaterial] =
   kea.pbr.add(
     primitive,
     material,

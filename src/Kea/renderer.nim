@@ -40,9 +40,18 @@ vec3 palette(float t) {
 """
 
 type
+  Renderable* = ref object
+    mesh*: Mesh
+    transform*: Transform
+    topology*: Topology
+
+  RenderItem*[M: tuple] = ref object
+    drawable*: Renderable
+    material*: M
+
   RendererObj[G: tuple; M: tuple] = object
     program: GLuint
-    drawables: seq[Drawable[M]]
+    items: seq[RenderItem[M]]
     storage: MeshStorage
 
     globalLocs: seq[GLint]
@@ -53,13 +62,8 @@ type
 
     globals*: G
 
-  Renderer*[G: tuple; M: tuple] = ref RendererObj[G, M]
-
-  Drawable*[T: tuple] = ref object
-    material*: T
-    mesh*: Mesh
-    transform*: Transform
-    topology*: Topology
+  Renderer*[G: tuple; M: tuple] = 
+    ref RendererObj[G, M]
 
 template `.`*[G, M](r: Renderer[G, M], field: untyped): untyped =
   r.globals.field
@@ -73,7 +77,7 @@ proc `=destroy`[G, M](r: var RendererObj[G, M]) =
       glDeleteProgram(r.program)
       r.program = 0
 
-    r.drawables = @[]
+    r.items = @[]
     r.materialLocs = @[]
     r.globalLocs = @[]
     r.storage = nil
@@ -121,14 +125,15 @@ proc render*[G, M](renderer: Renderer[G, M], target: RenderTarget) =
 
   bindUniforms(renderer.globalLocs, renderer.globals)
 
-  for drawable in renderer.drawables:
+  for item in renderer.items:
+    let drawable = item.drawable
     let model = drawable.transform.model
     let nmat = model.normalMatrix
 
     setUniform(renderer.modelLoc, model)
     setUniform(renderer.nmatLoc, nmat)
 
-    bindUniforms(renderer.materialLocs, drawable.material)
+    bindUniforms(renderer.materialLocs, item.material)
 
     drawable.mesh.draw(topology = drawable.topology)
 
@@ -138,18 +143,22 @@ proc add*[G, M](
   material = M.default,
   transform = Identity,
   topology = Triangles,
-): Drawable[M] =
+): RenderItem[M] =
   doAssert mesh != nil, "Cannot add a nil mesh"
   doAssert mesh.storage != nil, "Mesh has no storage"
 
-  result = Drawable[M](
+  let renderable = Renderable(
     mesh: mesh,
-    material: material,
     transform: transform,
     topology: topology
   )
 
-  renderer.drawables.add(result)
+  result = RenderItem[M](
+    drawable: renderable,
+    material: material
+  )
+
+  renderer.items.add(result)
 
 proc add*[G, M](
   renderer: Renderer[G, M],
@@ -163,7 +172,7 @@ proc add*[G, M](
   roll: float32 = 0.0,
   scale: float32 = 1.0,
   topology = Triangles,
-): Drawable[M] =
+): RenderItem[M] =
   renderer.add(
     mesh,
     material,
@@ -185,7 +194,7 @@ proc add*[G, M](
     material = M.default,
     transform = Identity,
     topology = Triangles,
-): Drawable[M] =
+): RenderItem[M] =
   renderer.add(
     primitive.mesh(renderer.storage),
     material,
@@ -205,7 +214,7 @@ proc add*[G, M](
   roll: float32 = 0.0,
   scale: float32 = 1.0,
   topology = Triangles,
-): Drawable[M] =
+): RenderItem[M] =
   renderer.add(
     primitive.mesh(renderer.storage),
     material,
@@ -221,29 +230,29 @@ proc add*[G, M](
     topology,
   )
 
-proc transform*(drawable: Drawable): var Transform =
-  drawable.transform
+proc transform*(item: RenderItem): var Transform =
+  item.drawable.transform
 
-proc position*(drawable: Drawable): var Vec3 =
-  drawable.transform.position
+proc position*(item: RenderItem): var Vec3 =
+  item.drawable.transform.position
 
-proc positioned*(drawable: Drawable): Vec3 =
-  let transform = drawable.transform
+proc positioned*(item: RenderItem): Vec3 =
+  let transform = item.drawable.transform
   transform.position
 
-proc scale*(drawable: Drawable): var Vec3 =
-  drawable.transform.scale
+proc scale*(item: RenderItem): var Vec3 =
+  item.drawable.transform.scale
 
-proc scaled*(drawable: Drawable): Vec3 =
-  let transform = drawable.transform
+proc scaled*(item: RenderItem): Vec3 =
+  let transform = item.drawable.transform
   transform.scale
 
-proc rotation*(drawable: Drawable): var Mat3 =
-  drawable.transform.rotation
+proc rotation*(item: RenderItem): var Mat3 =
+  item.drawable.transform.rotation
 
-proc rotated*(drawable: Drawable): Mat3 =
-  let transform = drawable.transform
+proc rotated*(item: RenderItem): Mat3 =
+  let transform = item.drawable.transform
   transform.rotation
 
-proc model*(drawable: Drawable): Mat4 =
-  drawable.transform.matrix
+proc model*(item: RenderItem): Mat4 =
+  item.drawable.transform.matrix
