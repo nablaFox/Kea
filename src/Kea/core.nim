@@ -7,6 +7,8 @@ import
   pbr,
   window,
   target,
+  primitives,
+  transform,
   nimgl/glfw
 
 const
@@ -27,10 +29,7 @@ type
     present*: proc() {.closure.}
 
   KeaObj = object
-    window*: Window
-
-    camera*: Camera
-    orbit*: OrbitController
+    window: Window
 
     storage: MeshStorage
 
@@ -52,16 +51,19 @@ proc init*(
     width: Natural,
     height: Natural,
     title: string,
-    orbit = orbit.new(target = WorldOrigin),
     vertexCapacity: Natural = DefaultVertexCapacity,
     indexCapacity: Natural = DefaultIndexCapacity,
     resizable = false,
+    decorated = false,
+    cursor = Normal,
 ): Kea =
   let window = window.new(
     width,
     height,
     title,
-    resizable
+    resizable,
+    decorated,
+    cursor
   )
 
   let storage = initMeshStorage(vertexCapacity, indexCapacity)
@@ -69,8 +71,6 @@ proc init*(
   result = Kea(
     window: window,
     storage: storage,
-    camera: camera.new(Perspective),
-    orbit: orbit,
     pbr: pbr.new(storage)
   ) 
 
@@ -88,6 +88,60 @@ proc newRenderer*[M, G](
 ): Renderer[M, G] =
   renderer.new(kea.storage, vert = vert, frag = frag)
 
+proc add*(
+  kea: Kea,
+  primitive: Primitive,
+  material: PBRMaterial,
+  transform = Identity,
+  topology = Triangles,
+): Drawable[PBRMaterial] =
+  kea.pbr.add(
+    primitive,
+    material,
+    transform,
+    topology
+  )
+
+proc add*(
+  kea: Kea,
+  primitive: Primitive,
+  material: PBRMaterial,
+  x: float32 = 0.0,
+  y: float32 = 0.0,
+  z: float32 = 0.0,
+  yaw: float32 = 0.0,
+  pitch: float32 = 0.0,
+  roll: float32 = 0.0,
+  scale: float32 = 1.0,
+  topology = Triangles,
+): Drawable[PBRMaterial] =
+  kea.pbr.add(
+    primitive,
+    material,
+    x = x,
+    y = y,
+    z = z,
+    pitch = pitch,
+    yaw = yaw,
+    roll = roll,
+    scale = scale,
+    topology
+  )
+
+proc render*(kea: Kea, target: RenderTarget, camera: Camera) =
+  kea.pbr.eye = camera.positioned
+  kea.pbr.view = camera.view
+  kea.pbr.proj = camera.proj target.aspect
+
+  kea.pbr.render(target)
+
+proc update*(orbit: var OrbitController, frame: Frame) =
+  orbit.update(
+    delta = frame.delta,
+    mouse = frame.mouse, 
+    keyboard = frame.keyboard, 
+  )
+
 iterator frames*(kea: Kea): Frame =
   let startTime = glfwGetTime()
   var previousTime = startTime
@@ -104,13 +158,6 @@ iterator frames*(kea: Kea): Frame =
     previousTime = currentTime
 
     kea.window.poll()
-
-    kea.orbit.update(
-      camera = kea.camera,
-      delta = delta,
-      mouse = mouse,
-      keyboard = keyboard
-    )
 
     yield Frame(
       delta: delta,

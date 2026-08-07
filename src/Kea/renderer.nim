@@ -180,7 +180,7 @@ proc add*[G, M](
     topology = Triangles,
 ): Drawable[M] =
   renderer.add(
-    mesh.new(renderer.storage, primitive), 
+    primitive.mesh(renderer.storage),
     material,
     transform, 
     topology,

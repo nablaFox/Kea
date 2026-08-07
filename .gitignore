@@ -2,3 +2,5 @@
 nimble.develop
 nimble.paths
 nimbledeps
+examples/*
+!examples/*.nim

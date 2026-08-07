@@ -1,6 +1,6 @@
 import input, target, nimgl/[glfw, opengl]
 
-type 
+type
   WindowObj = object
     handle: GLFWWindow
 
@@ -22,11 +22,16 @@ proc `=destroy`(window: var WindowObj) =
       window.handle.destroyWindow()
       window.handle = nil
 
+proc setCursorMode*(window: Window, mode: CursorMode) =
+  window.handle.setInputMode(GLFWCursorSpecial, mode.glfwCursorMode)
+
 proc new*(
   width: Natural,
   height: Natural,
   title: string,
   resizable = false,
+  decorated = false,
+  cursor = Normal,
   samples: Natural = 8
 ): Window =
   when not defined(release):
@@ -41,6 +46,11 @@ proc new*(
   glfwWindowHint(GLFWContextVersionMinor, 0)
   glfwWindowHint(GLFWOpenglProfile, GLFWOpenglCoreProfile)
   glfwWindowHint(GLFWSamples, samples.int32)
+
+  glfwWindowHint(
+    GLFWDecorated,
+    if decorated: GLFWTrue else: GLFWFalse
+  )
 
   if not resizable:
     glfwWindowHint(GLFWResizable, GLFWFalse)
@@ -91,6 +101,8 @@ proc new*(
   ]
 
   handle.setWindowUserPointer(cast[pointer](result))
+
+  result.setCursorMode(cursor)
 
   discard handle.setWindowSizeCallback(
     proc(

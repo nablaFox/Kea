@@ -66,6 +66,11 @@ type
     current: array[Key, bool]
     previous: array[Key, bool]
 
+  CursorMode* = enum
+    Normal
+    Hidden
+    Disabled
+
 proc glfwButton(button: MouseButton): GLFWMouseButton =
   case button
   of MouseButton.Left:
@@ -125,6 +130,12 @@ proc glfwKey*(key: Key): int32 =
   of Seven: int32(GLFWKey.K7)
   of Eight: int32(GLFWKey.K8)
   of Nine: int32(GLFWKey.K9)
+
+proc glfwCursorMode*(mode: CursorMode): int32 =
+  case mode
+  of Normal: GLFWCursorNormal
+  of Hidden: GLFWCursorHidden
+  of Disabled: GLFWCursorDisabled
 
 proc beginFrame*(keyboard: var Keyboard) =
   keyboard.previous = keyboard.current

@@ -12,7 +12,7 @@ type
     Perspective
     Orthographic
 
-  Camera* = object
+  CameraObj* = object
     transform*: Transform
     kind*: CameraKind
     fov*: float32
@@ -20,7 +20,16 @@ type
     far*: float32
     size*: float32
 
-proc new*(kind: CameraKind, fov = 60.0'f32, near = 0.1'f32, far = 100.0'f32, size = 10.0'f32, transform = Identity): Camera =
+  Camera* = ref CameraObj
+
+proc new*(
+  kind: CameraKind, 
+  fov = 60.0'f32, 
+  near = 0.1'f32, 
+  far = 100.0'f32, 
+  size = 10.0'f32, 
+  transform = Identity
+): Camera =
   Camera(
     transform: transform,
     kind: kind,
