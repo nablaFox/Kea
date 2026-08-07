@@ -4,6 +4,7 @@ import
     pbr,
     renderer, 
     math, 
+    target,
     primitives, 
     transform, 
     camera, 
@@ -12,7 +13,8 @@ import
     colors,
     orbit
   ], 
-  std/math
+  std/math,
+  nimgl/opengl
 
 export 
   core, 
@@ -48,12 +50,18 @@ when isMainModule:
     pitch = -PI / 2.0
   )
 
-  var component = 0
-
   for frame in kea.frames:
     if frame.keyboard.pressed(Escape):
       break 
 
+    frame.backbuffer.clear()
+
     kea.camera = kea.orbit.camera
 
-    kea.render(clear = Black)
+    kea.pbr.eye = kea.camera.position
+    kea.pbr.view = kea.camera.view
+    kea.pbr.proj = kea.camera.proj frame.aspect
+
+    kea.pbr.render(frame.backbuffer)
+
+    frame.present()

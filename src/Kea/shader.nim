@@ -1,4 +1,4 @@
-import nimgl/opengl, math
+import nimgl/opengl, math, texture
 
 proc compile(kind: GLenum, source: string): GLuint =
   result = glCreateShader(kind)
@@ -61,3 +61,7 @@ proc setUniform*(location: GLint, value: Mat3) =
     true,
     addr value[0][0]
   ) 
+
+proc setUniform*[K: static TextureKind](location: GLint, texture: Texture[K]) =
+  if location >= 0:
+    glUniformHandleui64ARB(location, texture.residentHandle)

@@ -173,4 +173,3 @@ proc pressed*(mouse: Mouse, button: MouseButton): bool =
 
 proc released*(mouse: Mouse, button: MouseButton): bool =
   not mouse.current[button] and mouse.previous[button]
-

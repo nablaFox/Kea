@@ -36,24 +36,24 @@ proc fitMatrix(alpha: float32, view: Vec3): Vec4 =
   [0.0, 0.0, 0.0, 0.0]
 
 let fitted = block:
-  const N = ltc.Resolution
+  const N = ltc.LutSize
 
   var matrixTab = newSeq[Vec4](N * N)
   var amplitudeTab = newSeq[Vec2](N * N)
 
-  for roughness in countdown(N - 1, 0):
-    for view in 0 ..< N:
-      let v = block:
-        let x = view / (N - 1)
+  for roughnessIndex in countdown(N - 1, 0):
+    for viewIndex in 0 ..< N:
+      let view = block:
+        let x = viewIndex / (N - 1)
         let theta = min(1.57, arccos(1.0 - x^2))
         [sin(theta).float32, 0.0, cos(theta).float32]
 
-      let a = max((roughness / (N - 1))^2, 0.00001) 
+      let alpha = max((roughnessIndex / (N - 1))^2, 0.00001) 
 
-      let index = roughness + view * N
+      let index = roughnessIndex + viewIndex * N
 
-      amplitudeTab[index] = fitAmplitude(a, v)
-      matrixTab[index] = fitMatrix(a, v)
+      amplitudeTab[index] = fitAmplitude(alpha, view)
+      matrixTab[index] = fitMatrix(alpha, view)
 
   (
     matrix: matrixTab,
@@ -62,6 +62,6 @@ let fitted = block:
 
 createDir(OutputDir)
 
-writeVectors(OutputDir / "matrix.bin", fitted.matrix)
+writeVectors(OutputDir / "inverse_matrix.rgba32f.bin", fitted.matrix)
 
-writeVectors(OutputDir / "amplitude.bin", fitted.amplitude)
+writeVectors(OutputDir / "magnitude_fresnel.rg32f.bin", fitted.amplitude)

@@ -1,7 +1,10 @@
-import nimgl/opengl, mesh, shader, transform, math, primitives
+import nimgl/opengl, mesh, shader, transform, math, primitives, target
+
+{.experimental: "dotOperators".}
 
 const VertexHeader = """
 #version 330 core
+#extension GL_ARB_bindless_texture : enable
 
 layout (location = 0) in vec3 position;
 layout (location = 1) in vec3 normal;
@@ -11,18 +14,14 @@ layout (location = 3) in vec2 uv;
 const float PI = 3.14159265359;
 
 uniform mat4 model;
-uniform mat4 view;
-uniform mat4 proj;
 uniform mat3 nmat;
-
 """
 
 const FragHeader = """
 #version 330 core
+#extension GL_ARB_bindless_texture : enable
 
 const float PI = 3.14159265359;
-
-uniform vec3 eye;
 
 vec3 palette(float t) {
   t = clamp(t, 0.0, 1.0);
@@ -38,45 +37,23 @@ vec3 palette(float t) {
   color = mix(color, teal, smoothstep(0.45, 0.75, t));
   return mix(color, light, smoothstep(0.70, 1.0, t));
 }
-
-"""
-
-const DefaultVert* = """
-out vec3 WorldPos;
-out vec3 Normal;
-flat out vec3 Color;
-
-void main() {
-  gl_Position = proj * view * model * vec4(position, 1.0);
-  WorldPos = vec3(model * vec4(position, 1.0));
-  Normal = nmat * normal;
-  Color = color;
-}
 """
 
 type
-  RenderContext* = object
-    view*: Mat4
-    proj*: Mat4
-    eye*: Vec3
-
-  RenderPass* = object
-    render*: proc(ctx: RenderContext) {.closure}
-
-  RendererObj[T: tuple] = object
+  RendererObj[G: tuple; M: tuple] = object
     program: GLuint
-    drawables: seq[Drawable[T]]
+    drawables: seq[Drawable[M]]
     storage: MeshStorage
 
-    viewLoc: GLint
-    projLoc: GLint
-    eyeLoc: GLint
+    globalLocs: seq[GLint]
+    materialLocs: seq[GLint]
+
     modelLoc: GLint
     nmatLoc: GLint
 
-    materialLocs: seq[GLint]
+    globals*: G
 
-  Renderer*[T: tuple] = ref RendererObj[T]
+  Renderer*[G: tuple; M: tuple] = ref RendererObj[G, M]
 
   Drawable*[T: tuple] = ref object
     material*: T
@@ -84,7 +61,13 @@ type
     transform*: Transform
     topology*: Topology
 
-proc `=destroy`[T](r: var RendererObj[T]) =
+template `.`*[G, M](r: Renderer[G, M], field: untyped): untyped =
+  r.globals.field
+
+template `.=`*[G, M](r: Renderer[G, M], field: untyped, value: untyped) =
+  r.globals.field = value
+
+proc `=destroy`[G, M](r: var RendererObj[G, M]) =
   {.cast(raises: []).}:
     if r.program != 0:
       glDeleteProgram(r.program)
@@ -92,9 +75,10 @@ proc `=destroy`[T](r: var RendererObj[T]) =
 
     r.drawables = @[]
     r.materialLocs = @[]
+    r.globalLocs = @[]
     r.storage = nil
 
-proc new*[T](storage: MeshStorage, frag: string, vert = DefaultVert): Renderer[T] = 
+proc new*[G, M](storage: MeshStorage, frag: string, vert: string): Renderer[G, M] = 
   new(result)
 
   result.program = shader.createProgram(
@@ -104,25 +88,31 @@ proc new*[T](storage: MeshStorage, frag: string, vert = DefaultVert): Renderer[T
 
   result.storage = storage
 
-  result.viewLoc  = glGetUniformLocation(result.program, "view")
-  result.projLoc  = glGetUniformLocation(result.program, "proj")
-  result.eyeLoc   = glGetUniformLocation(result.program, "eye")
+  proc uniformLocations[T: tuple](program: GLuint): seq[GLint] =
+    var values: T
+
+    for name, _ in values.fieldPairs:
+      result.add glGetUniformLocation(program, name)
+
+  result.globalLocs = uniformLocations[G](result.program)
+  result.materialLocs = uniformLocations[M](result.program)
+
   result.modelLoc = glGetUniformLocation(result.program, "model")
   result.nmatLoc  = glGetUniformLocation(result.program, "nmat")
 
-  var material: T
+proc render*[G, M](renderer: Renderer[G, M], target: RenderTarget) = 
+  target.use()
 
-  for name, _ in material.fieldPairs:
-    result.materialLocs.add(
-      glGetUniformLocation(result.program, name)
-    )
+  proc bindUniforms[T: tuple](locations: openArray[GLint], values: T) =
+    var index = 0
 
-proc render*[T](renderer: Renderer[T], ctx: RenderContext) = 
+    for _, value in values.fieldPairs:
+      setUniform(locations[index], value)
+      inc index
+
   glUseProgram(renderer.program)
 
-  setUniform(renderer.viewLoc, ctx.view)
-  setUniform(renderer.projLoc, ctx.proj)
-  setUniform(renderer.eyeLoc, ctx.eye)
+  bindUniforms(renderer.globalLocs, renderer.globals)
 
   for drawable in renderer.drawables:
     let model = drawable.transform.model
@@ -131,25 +121,21 @@ proc render*[T](renderer: Renderer[T], ctx: RenderContext) =
     setUniform(renderer.modelLoc, model)
     setUniform(renderer.nmatLoc, nmat)
 
-    var index = 0
-
-    for _, value in drawable.material.fieldPairs:
-      setUniform(renderer.materialLocs[index], value)
-      inc index
+    bindUniforms(renderer.materialLocs, drawable.material)
 
     drawable.mesh.draw(topology = drawable.topology)
 
-proc add*[T](
-  renderer: Renderer[T],
+proc add*[G, M](
+  renderer: Renderer[G, M],
   mesh: Mesh,
-  material: T,
+  material: M,
   transform = Identity,
   topology = Triangles,
-): Drawable[T] =
+): Drawable[M] =
   doAssert mesh != nil, "Cannot add a nil mesh"
   doAssert mesh.storage != nil, "Mesh has no storage"
 
-  result = Drawable[T](
+  result = Drawable[M](
     mesh: mesh,
     material: material,
     transform: transform,
@@ -158,10 +144,10 @@ proc add*[T](
 
   renderer.drawables.add(result)
 
-proc add*[T](
-  renderer: Renderer[T],
+proc add*[G, M](
+  renderer: Renderer[G, M],
   mesh: Mesh,
-  material: T,
+  material: M,
   x: float32 = 0.0,
   y: float32 = 0.0,
   z: float32 = 0.0,
@@ -170,7 +156,7 @@ proc add*[T](
   roll: float32 = 0.0,
   scale: float32 = 1.0,
   topology = Triangles,
-): Drawable[T] =
+): Drawable[M] =
   renderer.add(
     mesh,
     material,
@@ -186,13 +172,13 @@ proc add*[T](
     topology,
   )
 
-proc add*[T](
-    renderer: Renderer[T],
+proc add*[G, M](
+    renderer: Renderer[G, M],
     primitive: Primitive,
-    material: T,
+    material: M,
     transform = Identity,
     topology = Triangles,
-): Drawable[T] =
+): Drawable[M] =
   renderer.add(
     mesh.new(renderer.storage, primitive), 
     material,
@@ -200,10 +186,10 @@ proc add*[T](
     topology,
   )
 
-proc add*[T](
-  renderer: Renderer[T],
+proc add*[G, M](
+  renderer: Renderer[G, M],
   primitive: Primitive,
-  material: T,
+  material: M,
   x: float32 = 0.0,
   y: float32 = 0.0,
   z: float32 = 0.0,
@@ -212,7 +198,7 @@ proc add*[T](
   roll: float32 = 0.0,
   scale: float32 = 1.0,
   topology = Triangles,
-): Drawable[T] =
+): Drawable[M] =
   renderer.add(
     primitive.mesh(renderer.storage),
     material,

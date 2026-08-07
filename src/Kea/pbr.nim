@@ -1,16 +1,37 @@
-import renderer, mesh, math
+import renderer, mesh, math, ltc, texture, nimgl/opengl
+
+const 
+  PbrVert = """
+uniform mat4 view;
+uniform mat4 proj;
+
+out vec3 WorldPos;
+out vec3 Normal;
+flat out vec3 Color;
+
+void main() {
+  gl_Position = proj * view * model * vec4(position, 1.0);
+  WorldPos = vec3(model * vec4(position, 1.0));
+  Normal = nmat * normal;
+  Color = color;
+}
+"""
 
 const
   PbrFrag = """
 in vec3 WorldPos;
 in vec3 Normal;
 
+uniform vec3 eye;
 uniform vec3 albedo;
 uniform float metallic;
 uniform float roughness;
 
-uniform sampler2D ltcMatrix;
-uniform sampler2D ltcAmplitude;
+layout(bindless_sampler)
+uniform sampler2D ltcInverseMatrixLut;
+
+layout(bindless_sampler)
+uniform sampler2D ltcMagnitudeFresnelLut;
 
 out vec4 FragColor;
 
@@ -100,17 +121,51 @@ type PBRMaterial* = tuple[
   albedo: Vec3,
   roughness: float32,
   metallic: float32,
-  # ltcMatrix: GLuint,
-  # ltcAmplitude: GLuint
 ]
 
-type PBRRenderer* = Renderer[PBRMaterial]
+type PBRGlobals* = tuple[
+  view: Mat4,
+  proj: Mat4,
+  eye: Vec3,
+  ltcInverseMatrixLut: ColorTexture,
+  ltcMagnitudeFresnelLut: ColorTexture
+]
+
+type PBRRenderer* = Renderer[PBRGlobals, PBRMaterial]
 
 proc new*(storage: MeshStorage): PBRRenderer = 
-  renderer.new[PBRMaterial](
+  const options = TextureOptions(
+    minFilter: GL_LINEAR,
+    magFilter: GL_LINEAR,
+    wrapS: GL_CLAMP_TO_EDGE,
+    wrapT: GL_CLAMP_TO_EDGE
+  )
+
+  let ltcInverseMatrixLut = texture.new(
+    ltc.InverseMatrixData,
+    ltc.LutSize,
+    ltc.LutSize,
+    Rgba32Float,
+    options
+  )
+
+  let ltcMagnitudeFresnelLut = texture.new(
+    ltc.MagnitudeFresnelData,
+    ltc.LutSize,
+    ltc.LutSize,
+    Rg32Float,
+    options
+  )
+
+  result = renderer.new[PBRGlobals, PBRMaterial](
     storage,
+    vert = PbrVert,
     frag = PbrFrag, 
   )
+
+  result.ltcInverseMatrixLut = ltcInverseMatrixLut
+
+  result.ltcMagnitudeFresnelLut = ltcMagnitudeFresnelLut
 
 const Red*: PBRMaterial = (
   albedo: [1.0, 0.0, 0.0],
