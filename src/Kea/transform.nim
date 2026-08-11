@@ -83,7 +83,7 @@ proc transMatrix*(transform: Transform): Mat4 =
   let pos = transform.position
 
   [
-    [1.0'f32, 0.0, 0.0, pos.x],
+    [1.0'f, 0.0, 0.0, pos.x],
     [0.0, 1.0, 0.0, pos.y],
     [0.0, 0.0, 1.0, pos.z],
     [0.0, 0.0, 0.0, 1.0],

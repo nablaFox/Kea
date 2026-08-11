@@ -58,7 +58,7 @@ proc dot*[C: static int](a: Vec[C], b: Vec[C]): float32 =
 proc normalize*[C: static int](v: Vec[C]): Vec[C] = 
   let length = sqrt(dot(v, v))
 
-  if length > 1e-7'f32: v / length else: vec[C](0.0)
+  if length > 1e-7'f: v / length else: vec[C](0.0)
 
 proc length*[C: static int](v: Vec[C]): float32 =
   dot(v, v).sqrt
@@ -69,6 +69,9 @@ proc cross*(a, b: Vec3): Vec3 =
     a[2] * b[0] - a[0] * b[2],
     a[0] * b[1] - a[1] * b[0],
   ]
+
+proc reflect*(v, normal: Vec3): Vec3 =
+  v - normal * 2.0 * dot(v, normal)
 
 proc `*`*[R, N, C: static int](
   a: Matrix[R, N],
@@ -110,7 +113,7 @@ proc inverse*[C: static int](m: Matrix[C, C]): Matrix[C, C] =
       if abs(a[row][col]) > abs(a[pivot][col]):
         pivot = row
 
-    if abs(a[pivot][col]) < 1e-7'f32:
+    if abs(a[pivot][col]) < 1e-7'f:
       raise newException(ValueError, "matrix is singular")
 
     swap(a[col], a[pivot])

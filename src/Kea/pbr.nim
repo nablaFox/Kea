@@ -46,7 +46,7 @@ out vec4 FragColor;
 
 // TEMP
 vec3 lightPos = light.position;
-vec3 lightColor = vec3(23.47, 21.31, 20.79);
+vec3 lightColor = light.radiance;
 
 vec3 fresnelSchlick(vec3 H, vec3 V, vec3 F0) {
   float cosTheta = max(dot(H, V), 0.0);
@@ -128,8 +128,8 @@ void main() {
 
 type RectLight* = object
   position*: Vec3
-  rotation*: Mat3
-  size*: Vec2
+  rotation*: Mat3 = Identity3
+  size*: Vec2 = [1.0, 1.0]
   radiance*: Vec3
 
 type PBRMaterial* = tuple[

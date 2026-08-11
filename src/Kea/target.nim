@@ -163,12 +163,12 @@ proc use*[K: static RenderTargetKind](target: RenderTarget[K]) =
 proc clear*[K: static RenderTargetKind](
   target: RenderTarget[K],
   color: Color = Black,
-  depth = 1.0'f32,
+  depth = 1.0'f,
 ) =
   target.use()
 
   when K == BackBuffer or K == ColorDepth:
-    glClearColor(color.r, color.g, color.b, 1.0'f32)
+    glClearColor(color.r, color.g, color.b, 1.0'f)
     glClearDepth(depth.GLdouble)
 
     glClear(
@@ -177,7 +177,7 @@ proc clear*[K: static RenderTargetKind](
     )
 
   elif K == ColorOnly:
-    glClearColor(color.r, color.g, color.b, 1.0'f32)
+    glClearColor(color.r, color.g, color.b, 1.0'f)
     glClear(GL_COLOR_BUFFER_BIT)
 
   elif K == DepthOnly:
@@ -186,6 +186,6 @@ proc clear*[K: static RenderTargetKind](
 
 proc aspect*[K: static RenderTargetKind](target: RenderTarget[K]): float32 =
   if target.height == 0:
-    return 1.0'f32
+    return 1.0'f
 
   return target.width.float32 / target.height.float32

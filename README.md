@@ -10,11 +10,11 @@ and professional studio.
 - Gamma correction (ok)
 - Area light & dynamic shadows
 - Planar reflections
-- Anisotropic BDRF
-- Multiple scattering energy compensation
 - Diffuse IBL
 - Specular IBL
+- Anisotropic BDRF
 - GTAO
+- Multiple scattering energy compensation
 - Lagarde specular AO
 - horizon specular occlusion
 
@@ -35,6 +35,7 @@ Area Light & dynamic shadows:
 - https://cdn.iiit.ac.in/cdn/cvit.iiit.ac.in/images/ConferencePapers/2022/Bringing_ggx.pdf
 - https://research.nvidia.com/sites/default/files/pubs/2018-05_Combining-Analytic-Direct//I3D2018_combining.pdf
 - https://advances.realtimerendering.com/s2016/s2016_ltc_fresnel.pdf
+- https://advances.realtimerendering.com/s2016/s2016_ltc_rnd.pdf
 
 Others:
 

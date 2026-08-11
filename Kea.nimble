@@ -15,5 +15,5 @@ requires "nimgl >= 1.3.2"
 
 # Tasks
 
-task ltc, "Regenerate LTC lookup tables":
-  exec "nim r -d:release --path:src tools/ltc_fitter.nim"
+task ggx_fit, "Regenerate LTC lookup tables for isotropic ggx distribution":
+  exec "nim r -d:release --path:src tools/ggx_fitter.nim"

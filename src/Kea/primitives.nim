@@ -52,7 +52,7 @@ const SphereMesh* = block:
     for longitude in 0..longitudeSegments:
       let
         u = float32(longitude) / float32(longitudeSegments)
-        phi = u * 2.0'f32 * PI.float32
+        phi = u * 2.0'f * PI.float32
 
         x = sinTheta * cos(phi)
         y = cosTheta
@@ -61,7 +61,7 @@ const SphereMesh* = block:
       geometry.vertices.add Vertex(
         position: [x, y, z],
         normal: [x, y, z],
-        uv: [u, 1.0'f32 - v],
+        uv: [u, 1.0'f - v],
       )
 
   let rowSize = longitudeSegments + 1

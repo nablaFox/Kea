@@ -24,10 +24,10 @@ type
 
 proc new*(
   kind: CameraKind, 
-  fov = 60.0'f32, 
-  near = 0.1'f32, 
-  far = 100.0'f32, 
-  size = 10.0'f32, 
+  fov = 60.0'f, 
+  near = 0.1'f, 
+  far = 100.0'f, 
+  size = 10.0'f, 
   transform = Identity
 ): Camera =
   Camera(
