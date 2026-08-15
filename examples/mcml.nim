@@ -1,18 +1,138 @@
-import Kea, std/random
-
-const N: Natural = 512
-
-let kea = init(
-  width = 800, 
-  height = 600, 
-  title = "mcml"
-)
+import Kea, std/[random, sequtils]
 
 type SlabMaterial = tuple[
   transmittance: ColorTexture,
   diffuse: ColorTexture,
   depth: float32
 ]
+
+proc add(
+  renderer: Renderer[tuple[view: Mat4, proj: Mat4], SlabMaterial],
+  resolution: Natural,
+  transform: Transform,
+  depth: float32
+): RenderItem[SlabMaterial] =
+  renderer.add(
+    Cube,
+    (
+      transmittance: texture.new(
+        width = resolution, 
+        height = resolution, 
+        format = R32Float,
+        DataTextureOptions
+      ),
+      diffuse: texture.new(
+        width = resolution, 
+        height = resolution, 
+        format = R32Float,
+        DataTextureOptions
+      ),
+      depth: depth
+    ),
+    transform
+  )
+
+proc mcml(
+  slab: RenderItem[SlabMaterial], 
+  size: float32,
+  passes: Natural, 
+  photons: Natural,
+  absorption: float32,
+  scattering: float32,
+  anisotropy: float32,
+) =
+  let N = slab.material.transmittance.width
+  let depth = slab.material.depth
+
+  var transmittance = newSeq[float32](N * N) 
+  var diffuse = newSeq[float32](N * N)
+
+  proc photonRandomWalk(): tuple[
+    weight: float32, 
+    pos: Vec3,
+    dir: Vec3
+  ] =
+    var weight = 1.0'f
+    var pos = [0.0'f, 0.0, 0.0]
+    var dir = [0.0'f, 0.0, 1.0]
+
+    let q = absorption / (absorption + scattering)
+
+    while true:
+      let boundary = 
+        if dir.z > 0: (depth - pos.z) / dir.z
+        elif dir.z < 0: - pos.z / dir.z
+        else: Inf.float32
+
+      # sampled from Exp(scattering) (Beer-Lambert law)
+      let dist = - ln(rand(1.0)) / (absorption + scattering)
+
+      if dist >= boundary:
+        pos += dir * boundary
+        break
+
+      pos += dir * dist
+
+      weight *= (1 - q)
+
+      # sampled from Henyey-Greenstein
+      let cosTheta = 
+        if anisotropy == 0: 2 * rand(1.0) - 1
+        else:
+          let g = anisotropy
+          let r = rand(1.0)
+
+          (1 + g^2 - ((1 - g^2) / (1 - g + 2*g*r))^2) / (2*g)
+
+      let phi = 2 * PI * rand(1.0)
+
+      dir = dir.rotate(
+        arccos(cosTheta.clamp(-1.0'f, 1.0'f)), 
+        phi
+      ) 
+
+      dir = dir.normalize
+
+    (weight: weight, pos: pos, dir: dir)
+    
+  for n in 0..<passes:
+    for i in 0..<photons:
+      let (weight, pos, dir) = photonRandomWalk()
+
+      # mappping [-size/2, size/2] x [-size/2, size/2] -> [0, N] x [0, N]
+      let i = int(N.float32 * (pos.x + size / 2) / size)
+      let j = int(N.float32 * (pos.y + size / 2) / size)
+
+      if i < 0 or i >= N or j < 0 or j >= N:
+        continue
+
+      if dir.z < 0: diffuse[j * N + i] += weight
+      else: transmittance[j * N + i] += weight
+
+  for i in 0..<N*N:
+    transmittance[i] /= passes.float32
+    diffuse[i] /= passes.float32
+
+  slab.material.transmittance.update(transmittance)
+  slab.material.diffuse.update(diffuse)
+
+proc render(
+  renderer: Renderer[tuple[view: Mat4, proj: Mat4], SlabMaterial], 
+  backbuffer: RenderTarget, 
+  camera: Camera
+) =
+  renderer.view = camera.view
+  renderer.proj = camera.proj(backbuffer.aspect)
+
+  renderer.render(backbuffer)
+
+randomize()
+
+let kea = init(
+  width = 800, 
+  height = 600, 
+  title = "mcml"
+)
 
 let renderer = kea.newRenderer(
   material = SlabMaterial,
@@ -92,24 +212,12 @@ let renderer = kea.newRenderer(
 )
 
 let slab = renderer.add(
-  Cube,
-  (
-    transmittance: texture.new(
-      width = N, 
-      height = N, 
-      format = R32Float,
-      DataTextureOptions
-    ),
-    diffuse: texture.new(
-      width = N, 
-      height = N, 
-      format = R32Float,
-      DataTextureOptions
-    ),
-    depth: 0.05'f
-  ),
-  yaw = -PI / 2,
-  y = 1.0
+  resolution = 512,
+  depth = 0.05'f,
+  transform = transform.new(
+    y = 1,
+    yaw = -PI / 2
+  )
 )
 
 var orbit = orbit.new(
@@ -118,111 +226,24 @@ var orbit = orbit.new(
   distance = 8.0
 )
 
-proc mcmlUpdate(
-  slab: RenderItem[SlabMaterial], 
-  size: float32,
-  passes: Natural, 
-  photons: Natural,
-  absorption: float32,
-  scattering: float32,
-  anisotropy: float32,
-) =
-  var transmittance: array[N * N, float32]
-  var diffuse: array[N * N, float32]
-
-  let depth = slab.material.depth
-
-  proc photonRandomWalk(): tuple[
-    weight: float32, 
-    pos: Vec3,
-    dir: Vec3
-  ] =
-    var weight = 1.0'f
-    var pos = [0.0'f, 0.0, 0.0]
-    var dir = [0.0'f, 0.0, 1.0]
-
-    let q = absorption / (absorption + scattering)
-
-    while true:
-      let boundary = 
-        if dir.z > 0: (depth - pos.z) / dir.z
-        elif dir.z < 0: - pos.z / dir.z
-        else: Inf.float32
-
-      # sampled from Exp(scattering) (Beer-Lambert law)
-      let dist = - ln(rand(1.0)) / (absorption + scattering)
-
-      if dist >= boundary:
-        pos += dir * boundary
-        break
-
-      pos += dir * dist
-
-      weight *= (1 - q)
-
-      # sampled from Henyey-Greenstein
-      let cosTheta = 
-        if anisotropy == 0: 2 * rand(1.0) - 1
-        else:
-          let g = anisotropy
-          let r = rand(1.0)
-
-          (1 + g^2 - ((1 - g^2) / (1 - g + 2*g*r))^2) / (2*g)
-
-      let phi = 2 * PI * rand(1.0)
-
-      dir = dir.rotate(
-        arccos(cosTheta.clamp(-1.0'f, 1.0'f)), 
-        phi
-      ) 
-
-      dir = dir.normalize
-
-    (weight: weight, pos: pos, dir: dir)
-    
-  for n in 0..<passes:
-    for i in 0..<photons:
-      let (weight, pos, dir) = photonRandomWalk()
-
-      # mappping [-size/2, size/2] x [-size/2, size/2] -> [0, N] x [0, N]
-      let i = int(N.float32 * (pos.x + size / 2) / size)
-      let j = int(N.float32 * (pos.y + size / 2) / size)
-
-      if i < 0 or i >= N or j < 0 or j >= N:
-        continue
-
-      if dir.z < 0: diffuse[j * N + i] += weight
-      else: transmittance[j * N + i] += weight
-
-  for i in 0..<N*N:
-    transmittance[i] /= passes.float32
-    diffuse[i] /= passes.float32
-
-  slab.material.transmittance.update(transmittance)
-  slab.material.diffuse.update(diffuse)
-
-randomize()
-
-slab.mcmlUpdate(
-  size = 0.5'f,
-  passes = 128, 
-  photons = 100_000,
-  absorption = 2'f,
-  scattering = 3'f,
-  anisotropy = 0.75'f
-)
-
 for frame in kea.frames:
   if frame.keyboard.pressed(Escape):
     break 
+
+  if frame.keyboard.pressed(Space):
+    slab.mcml(
+      size = 0.5'f,
+      passes = 128, 
+      photons = 100_000,
+      absorption = 2'f,
+      scattering = 3'f,
+      anisotropy = 0.75'f
+    )
 
   frame.backbuffer.clear(color = White * 0.1)
 
   orbit.update(frame)
 
-  renderer.view = orbit.camera.view
-  renderer.proj = orbit.camera.proj(frame.backbuffer.aspect)
-
-  renderer.render(frame.backbuffer)
+  renderer.render(frame.backbuffer, orbit.camera)
 
   frame.present()

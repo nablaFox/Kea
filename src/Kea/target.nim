@@ -184,6 +184,18 @@ proc clear*[K: static RenderTargetKind](
     glClearDepth(depth.GLdouble)
     glClear(GL_DEPTH_BUFFER_BIT)
 
+proc color*(target: RenderTarget[ColorOnly]): ColorTexture =
+  target.color
+
+proc color*(target: RenderTarget[ColorDepth]): ColorTexture =
+  target.color
+
+proc depth*(target: RenderTarget[DepthOnly]): DepthTexture =
+  target.depth
+
+proc depth*(target: RenderTarget[ColorDepth]): DepthTexture =
+  target.depth
+
 proc aspect*[K: static RenderTargetKind](target: RenderTarget[K]): float32 =
   if target.height == 0:
     return 1.0'f

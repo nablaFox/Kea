@@ -1,5 +1,4 @@
-import math
-import std/math
+import std/math, math
 
 type
   Transform* = object

@@ -1,12 +1,12 @@
 import Kea
 
-type 
-  LightPanel = object
-    kea: Kea
-    quad: RenderItem[tuple[radiance: Color]] 
-    renderer: Renderer[tuple[view: Mat4, proj: Mat4], tuple[radiance: Color]]
+let kea = init(
+  width = 800, 
+  height = 600, 
+  title = "basic"
+)
 
-proc newLightPanel(kea: Kea): LightPanel = 
+let panel = block:
   let renderer = kea.newRenderer(
     material = tuple[radiance: Color],
     globals = (view: Identity4, proj: Identity4),
@@ -29,36 +29,30 @@ proc newLightPanel(kea: Kea): LightPanel =
     """
   )
 
-  let quad = renderer.add(
+  let panel = renderer.add(
     Quad, 
     (radiance: kea.light.radiance),
-    transform = transform.new(position = kea.light.position)
+    transform = transform.new(
+      position = kea.light.position
+    )
   )
 
-  result.kea = kea
-  result.quad = quad
-  result.renderer = renderer
+  (
+    renderer: renderer,
 
-proc render(panel: LightPanel, backbuffer: RenderTarget[BackBuffer], camera: Camera) = 
-  panel.quad.position = panel.kea.light.position
-  panel.quad.rotation = panel.kea.light.rotation
-  panel.quad.scale = [panel.kea.light.size.x, panel.kea.light.size.y, 1.0]
+    render: proc(target: RenderTarget[BackBuffer], camera: Camera) = 
+      panel.position = kea.light.position
+      panel.rotation = kea.light.rotation
+      panel.scale = [kea.light.size.x, kea.light.size.y, 1.0]
 
-  panel.quad.material.radiance = panel.kea.light.radiance
+      panel.material.radiance = kea.light.radiance
 
-  panel.renderer.view = camera.view
-  panel.renderer.proj = camera.proj(backbuffer.aspect)
+      renderer.view = camera.view
+      renderer.proj = camera.proj(target.aspect)
 
-  panel.renderer.render(backbuffer)
-
-let kea = init(
-  width = 800, 
-  height = 600, 
-  title = "basic"
-)
-
-let panel = kea.newLightPanel()
-
+      renderer.render(target)
+  )
+  
 var orbit = orbit.new(
   camera.new(Perspective),
   target = [0.0'f, 1.0, 0.0], 

@@ -50,15 +50,15 @@ type
     material*: M
 
   RendererObj[G: tuple; M: tuple] = object
-    program: GLuint
+    program: Program
     items: seq[RenderItem[M]]
     storage: MeshStorage
 
-    globalLocs: seq[GLint]
-    materialLocs: seq[GLint]
+    globalUniforms: seq[Uniform]
+    materialUniforms: seq[Uniform]
 
-    modelLoc: GLint
-    nmatLoc: GLint
+    modelUniform: Uniform
+    nmatUniform: Uniform
 
     globals*: G
 
@@ -84,13 +84,10 @@ template `.=`*[G, M](r: Renderer[G, M], field: untyped, value: untyped) =
 
 proc `=destroy`[G, M](r: var RendererObj[G, M]) =
   {.cast(raises: []).}:
-    if r.program != 0:
-      glDeleteProgram(r.program)
-      r.program = 0
-
+    r.program.destroy()
     r.items = @[]
-    r.materialLocs = @[]
-    r.globalLocs = @[]
+    r.globalUniforms = @[]
+    r.materialUniforms = @[]
     r.storage = nil
 
 proc new*[G, M](
@@ -101,20 +98,22 @@ proc new*[G, M](
 ): Renderer[G, M] = 
   new(result)
 
-  result.program = shader.createProgram(
+  let program = shader.new(
     vert = VertexHeader & vert, 
     frag = FragHeader & frag
   )
 
-  result.storage = storage
+  result.globalUniforms = program.uniforms[:G]
+  result.materialUniforms = program.uniforms[:M]
 
-  result.globalLocs = shader.uniformLocations[G](result.program)
-  result.materialLocs = shader.uniformLocations[M](result.program)
+  result.modelUniform = program.uniform("model")
+  result.nmatUniform  = program.uniform("nmat")
 
-  result.modelLoc = shader.uniformLocation(result.program, "model")
-  result.nmatLoc  = shader.uniformLocation(result.program, "nmat")
+  result.program = program
 
   result.globals = globals
+
+  result.storage = storage
 
 proc render*[G, M, K](
   renderer: Renderer[G, M], 
@@ -156,19 +155,19 @@ proc render*[G, M, K](
     glEnable(GL_CULL_FACE)
     glCullFace(GL_FRONT)
 
-  glUseProgram(renderer.program)
+  renderer.program.use()
 
-  shader.setUniforms(renderer.globalLocs, renderer.globals)
+  renderer.globalUniforms.set(renderer.globals)
 
   for item in renderer.items:
     let drawable = item.drawable
     let model = drawable.transform.model
     let nmat = model.normalMatrix
 
-    shader.setUniform(renderer.modelLoc, model)
-    shader.setUniform(renderer.nmatLoc, nmat)
+    renderer.modelUniform.set(model)
+    renderer.nmatUniform.set(nmat)
 
-    shader.setUniforms(renderer.materialLocs, item.material)
+    renderer.materialUniforms.set(item.material)
 
     drawable.mesh.draw(topology = drawable.topology)
 

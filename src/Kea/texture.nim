@@ -36,10 +36,11 @@ type
 
     when K == ColorKind:
       format: ColorFormat
+      imageHandle: GLuint64
     else:
       format: DepthFormat
 
-    handle: GLuint64
+    sampleHandle: GLuint64
 
   Texture*[K: static TextureKind] = ref TextureObj[K]
 
@@ -64,9 +65,14 @@ const
 
 proc `=destroy`[K: static TextureKind](texture: var TextureObj[K]) =
   {.cast(raises: []).}:
-    if texture.handle != 0:
-      glMakeTextureHandleNonResidentARB(texture.handle)
-      texture.handle = 0
+    if texture.sampleHandle != 0:
+      glMakeTextureHandleNonResidentARB(texture.sampleHandle)
+      texture.sampleHandle = 0
+
+    when K == ColorKind:
+      if texture.imageHandle != 0:
+        glMakeImageHandleNonResidentARB(texture.imageHandle)
+        texture.imageHandle = 0
 
     if texture.id != 0:
       glDeleteTextures(1, addr texture.id)
@@ -352,10 +358,7 @@ proc update*(
     of Rgba32Float:
       4
     else:
-      doAssert false, "Unsupported color format for float32 data"
-      0
-
-  echo "ok"
+      raiseAssert "Unsupported color format for float32 data"
 
   doAssert data.len == texture.width * texture.height * components,
     "Texture data size does not match texture dimensions"
@@ -384,18 +387,62 @@ proc format*(texture: ColorTexture): ColorFormat =
 proc format*(texture: DepthTexture): DepthFormat =
   texture.format
 
-proc residentHandle*[K: static TextureKind](
+proc imageFormat(format: ColorFormat): GLenum =
+  case format
+  of Rgba8Linear:
+    GL_RGBA8
+
+  of R32Float:
+    GL_R32F
+
+  of Rg32Float:
+    GL_RG32F
+
+  of Rgba32Float:
+    GL_RGBA32F
+
+  of Rgba8Srgb:
+    raiseAssert "sRGB texture cannot be used as image2D"
+
+  of Rgb32Float:
+    raiseAssert "RGB32F texture cannot be used as image2D"
+
+proc residentSampleHandle*[K: static TextureKind](
   texture: Texture[K],
 ): GLuint64 =
   doAssert texture != nil
 
-  if texture.handle == 0:
-    texture.handle =
+  if texture.sampleHandle == 0:
+    texture.sampleHandle =
       glGetTextureHandleARB(texture.id)
 
-    doAssert texture.handle != 0,
+    doAssert texture.sampleHandle != 0,
       "Failed to create bindless texture handle"
 
-    glMakeTextureHandleResidentARB(texture.handle)
+    glMakeTextureHandleResidentARB(texture.sampleHandle)
 
-  result = texture.handle
+  result = texture.sampleHandle
+
+proc residentImageHandle*(
+  texture: ColorTexture,
+): GLuint64 =
+  doAssert texture != nil
+
+  if texture.imageHandle == 0:
+    texture.imageHandle = glGetImageHandleARB(
+      texture.id,
+      0,                   # mip level
+      false,               # not layered
+      0,                   # layer
+      texture.format.imageFormat,
+    )
+
+    doAssert texture.imageHandle != 0,
+      "Failed to create bindless image handle"
+
+    glMakeImageHandleResidentARB(
+      texture.imageHandle,
+      GL_READ_WRITE,
+    )
+
+  result = texture.imageHandle

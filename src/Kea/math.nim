@@ -90,7 +90,10 @@ proc reflect*(v, normal: Vec3): Vec3 =
   v - normal * 2.0 * dot(v, normal)
 
 proc rotate*(axis: Vec3, theta: float32, phi: float32): Vec3 =
-  let t = axis.perpendicular
+  let axis = axis.normalize
+
+  let t = axis.perpendicular.normalize
+
   let b = cross(t, axis)
 
   let r = t * cos(phi) + b * sin(phi)

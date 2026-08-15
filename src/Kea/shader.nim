@@ -1,113 +1,229 @@
 import nimgl/opengl, math, texture
 
-proc compile(kind: GLenum, source: string): GLuint =
-  result = glCreateShader(kind)
+type
+  Program* = distinct GLuint
 
-  let cSource = source.cstring
+  Uniform* = object
+    location: GLint
+    glType: GLenum
 
-  glShaderSource(result, 1, addr cSource, nil)
-  glCompileShader(result)
+proc new*(vert: string, frag: string): Program =
+  proc compile(kind: GLenum, source: string): GLuint =
+    result = glCreateShader(kind)
 
-  var success: GLint
-  glGetShaderiv(result, GL_COMPILE_STATUS, addr success)
+    let cSource = source.cstring
 
-  if success == 0:
-    var log = newString(512)
-    glGetShaderInfoLog(result, 512, nil, log.cstring)
-    quit("Shader compilation failed:\n" & log)
+    glShaderSource(result, 1, addr cSource, nil)
+    glCompileShader(result)
 
-proc createProgram*(vert: string, frag: string): GLuint =
+    var success: GLint
+    glGetShaderiv(result, GL_COMPILE_STATUS, addr success)
+
+    if success == 0:
+      var log = newString(512)
+      glGetShaderInfoLog(result, 512, nil, log.cstring)
+      quit("Shader compilation failed:\n" & log)
+
   let vertexShader = compile(GL_VERTEX_SHADER, vert)
   let fragmentShader = compile(GL_FRAGMENT_SHADER, frag)
 
-  result = glCreateProgram()
+  let program = glCreateProgram()
 
-  glAttachShader(result, vertexShader)
-  glAttachShader(result, fragmentShader)
-  glLinkProgram(result)
-  
+  glAttachShader(program, vertexShader)
+  glAttachShader(program, fragmentShader)
+  glLinkProgram(program)
+
   var success: GLint
-  glGetProgramiv(result, GL_LINK_STATUS, addr success)
- 
+  glGetProgramiv(program, GL_LINK_STATUS, addr success)
+
   if success == 0:
     var log = newString(512)
-    glGetProgramInfoLog(result, 512, nil, log.cstring)
+    glGetProgramInfoLog(program, 512, nil, log.cstring)
     quit("Shader linking failed:\n" & log)
 
   glDeleteShader(vertexShader)
   glDeleteShader(fragmentShader)
 
-proc setUniform*(location: GLint, value: Natural) =
-  glUniform1ui(location, value.GLuint)
+  result = Program(program)
 
-proc setUniform*(location: GLint, value: float32) =
-  glUniform1f(location, value)
+proc id*(program: Program): GLuint {.inline.} =
+  program.GLuint
 
-proc setUniform*(location: GLint, value: Vec2) =
-  glUniform2fv(location, 1, addr value[0])
+proc use*(program: Program) =
+  glUseProgram(program.id)
 
-proc setUniform*(location: GLint, value: Vec3) =
-  glUniform3fv(location, 1, addr value[0])
+proc destroy*(program: var Program) =
+  if not program.id == 0:
+    glDeleteProgram(program.id)
+    program = Program(0)
 
-proc setUniform*(location: GLint, value: Vec4) =
-  glUniform4fv(location, 1, addr value[0])
+template glTypeOf(T: typedesc): GLenum =
+  when T is uint32:
+    GL_UNSIGNED_INT
+  elif T is float32:
+    EGL_FLOAT
+  elif T is Vec2:
+    GL_FLOAT_VEC2
+  elif T is Vec3:
+    GL_FLOAT_VEC3
+  elif T is Vec4:
+    GL_FLOAT_VEC4
+  elif T is Mat3:
+    GL_FLOAT_MAT3
+  elif T is Mat4:
+    GL_FLOAT_MAT4
+  else:
+    {.error: "Unsupported uniform type: " & $T.}
 
-proc setUniform*(location: GLint, value: Mat4) =
-  glUniformMatrix4fv(location, 1, true, addr value[0][0])
+template checkType(uniform: Uniform, value: typed) =
+  when not defined(release) and not defined(danger):
+    if uniform.location >= 0:
+      doAssert uniform.glType == glTypeOf(typeof(value))
 
-proc setUniform*(location: GLint, value: Mat3) = 
-  glUniformMatrix3fv(location, 1, true, addr value[0][0]) 
+proc uniform*(program: Program, name: string): Uniform =
+  let id = GLuint(program)
 
-proc setUniform*[K: static TextureKind](location: GLint, texture: Texture[K]) =
-  if location >= 0:
-    glUniformHandleui64ARB(location, texture.residentHandle)
+  result.location = glGetUniformLocation(id, name.cstring)
 
-proc setUniforms*[T: tuple](locations: openArray[GLint], values: T) =
+  if result.location < 0:
+    return
+
+  var cName = name.cstring
+  var index: GLuint
+
+  glGetUniformIndices(
+    id,
+    1,
+    addr cName,
+    addr index
+  )
+
+  if index == GL_INVALID_INDEX:
+    return
+
+  var glType: GLint
+
+  glGetActiveUniformsiv(
+    id,
+    1,
+    addr index,
+    GL_UNIFORM_TYPE,
+    addr glType
+  )
+
+  result.glType = GLenum(glType.uint32)
+
+proc set*(uniform: Uniform, value: uint32) =
+  checkType(uniform, value)
+  glUniform1ui(uniform.location, value.GLuint)
+
+proc set*(uniform: Uniform, value: float32) =
+  checkType(uniform, value)
+  glUniform1f(uniform.location, value)
+
+proc set*(uniform: Uniform, value: Vec2) =
+  checkType(uniform, value)
+  glUniform2fv(uniform.location, 1, addr value[0])
+
+proc set*(uniform: Uniform, value: Vec3) =
+  checkType(uniform, value)
+  glUniform3fv(uniform.location, 1, addr value[0])
+
+proc set*(uniform: Uniform, value: Vec4) =
+  checkType(uniform, value)
+  glUniform4fv(uniform.location, 1, addr value[0])
+
+proc set*(uniform: Uniform, value: Mat4) =
+  checkType(uniform, value)
+  glUniformMatrix4fv(uniform.location, 1, true, addr value[0][0])
+
+proc set*(uniform: Uniform, value: Mat3) = 
+  checkType(uniform, value)
+  glUniformMatrix3fv(uniform.location, 1, true, addr value[0][0]) 
+
+proc setTexture[K: static TextureKind](uniform: Uniform, texture: Texture[K]) =
+  if uniform.location < 0:
+    return
+
+  when not defined(release) and not defined(danger):
+    when K == ColorKind:
+      doAssert (
+        uniform.glType == GL_SAMPLER_2D or
+        uniform.glType == GL_IMAGE_2D
+      )
+    else:
+      doAssert uniform.glType == GL_SAMPLER_2D
+
+  case uniform.glType:
+  of GL_SAMPLER_2D:
+    glUniformHandleui64ARB(
+      uniform.location,
+      texture.residentSampleHandle
+    )
+
+  of GL_IMAGE_2D:
+    when K == ColorKind:
+      glUniformHandleui64ARB(
+        uniform.location,
+        texture.residentImageHandle
+      )
+    else:
+      raiseAssert "Depth texture cannot be used as image2D"
+
+  else:
+    raiseAssert "Unsupported uniform type for texture: " & $uniform.glType.uint32
+
+proc set*(uniform: Uniform, texture: ColorTexture) =
+  setTexture[ColorKind](uniform, texture)
+
+proc set*(uniform: Uniform, texture: DepthTexture) =
+  setTexture[DepthKind](uniform, texture)
+
+proc set*[T: tuple](uniforms: openArray[Uniform], values: T) =
   var index = 0
 
-  proc set[T](
-    locations: openArray[GLint],
-    value: T,
-    index: var int
+  proc helper[U](
+    uniforms: openArray[Uniform],
+    value: U,
+    index: var int,
   ) =
-    when compiles(setUniform(GLint(0), value)):
-      setUniform(locations[index], value)
+    when compiles(Uniform().set value):
+      uniforms[index].set(value)
       inc index
 
-    elif T is tuple or T is object:
+    elif U is tuple or U is object:
       for _, field in value.fieldPairs:
-        set(locations, field, index)
+        helper(uniforms, field, index)
 
     else:
-      {.error: "Unsupported uniform type: " & $T.}
+      {.error: "Unsupported uniform type: " & $U.}
 
-  set(locations, values, index)
+  helper(uniforms, values, index)
 
-proc uniformLocation*(program: GLuint, name: string): GLint =
-  glGetUniformLocation(program, name)
-
-proc uniformLocations*[T](program: GLuint): seq[GLint] =
+proc uniforms*[T: tuple](program: Program): seq[Uniform] =
   var value: T
 
-  proc collect[T](
-    program: GLuint,
+  proc collect[U](
+    program: Program,
     name: string,
-    value: T,
-    locations: var seq[GLint]
+    value: U,
+    uniforms: var seq[Uniform],
   ) =
-    when compiles(setUniform(GLint(0), value)):
-      locations.add glGetUniformLocation(program, name)
+    when compiles(Uniform().set value):
+      uniforms.add program.uniform(name)
 
-    elif T is tuple or T is object:
+    elif U is tuple or U is object:
       for fieldName, fieldValue in value.fieldPairs:
         let childName =
-          if name.len == 0: fieldName
-          else: name & "." & fieldName
+          if name.len == 0:
+            fieldName
+          else:
+            name & "." & fieldName
 
-        collect(program, childName, fieldValue, locations)
+        collect(program, childName, fieldValue, uniforms)
 
     else:
-      {.error: "Unsupported uniform type: " & $T.}
+      {.error: "Unsupported uniform type: " & $U.}
 
   for name, field in value.fieldPairs:
     collect(program, name, field, result)
