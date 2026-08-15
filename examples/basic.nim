@@ -46,8 +46,8 @@ proc render(panel: LightPanel, backbuffer: RenderTarget[BackBuffer], camera: Cam
 
   panel.quad.material.radiance = panel.kea.light.radiance
 
-  panel.renderer.globals.view = camera.view
-  panel.renderer.globals.proj = camera.proj(backbuffer.aspect)
+  panel.renderer.view = camera.view
+  panel.renderer.proj = camera.proj(backbuffer.aspect)
 
   panel.renderer.render(backbuffer)
 

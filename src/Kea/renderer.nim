@@ -65,6 +65,17 @@ type
   Renderer*[G: tuple; M: tuple] = 
     ref RendererObj[G, M]
 
+  CullMode* = enum
+    CullDisabled
+    CullBack
+    CullFront
+
+  DepthTest* = enum
+    DepthDisabled
+    DepthLess
+    DepthLessEqual
+    DepthAlways
+
 template `.`*[G, M](r: Renderer[G, M], field: untyped): untyped =
   r.globals.field
 
@@ -105,8 +116,45 @@ proc new*[G, M](
 
   result.globals = globals
 
-proc render*[G, M](renderer: Renderer[G, M], target: RenderTarget) = 
+proc render*[G, M, K](
+  renderer: Renderer[G, M], 
+  target: RenderTarget[K], 
+  cullMode: CullMode = CullBack,
+  depthTest: DepthTest = DepthLess,
+  depthWrite: bool = true,
+) = 
   target.use()
+
+  when K in {BackBuffer, DepthOnly, ColorDepth}:
+    case depthTest
+    of DepthDisabled:
+      glDisable(GL_DEPTH_TEST)
+
+    of DepthLess:
+      glEnable(GL_DEPTH_TEST)
+      glDepthFunc(GL_LESS)
+
+    of DepthLessEqual:
+      glEnable(GL_DEPTH_TEST)
+      glDepthFunc(GL_LEQUAL)
+
+    of DepthAlways:
+      glEnable(GL_DEPTH_TEST)
+      glDepthFunc(GL_ALWAYS)
+
+    glDepthMask(depthWrite)
+
+  case cullMode
+  of CullDisabled:
+    glDisable(GL_CULL_FACE)
+
+  of CullBack:
+    glEnable(GL_CULL_FACE)
+    glCullFace(GL_BACK)
+
+  of CullFront:
+    glEnable(GL_CULL_FACE)
+    glCullFace(GL_FRONT)
 
   glUseProgram(renderer.program)
 

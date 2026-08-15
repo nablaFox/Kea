@@ -1,4 +1,4 @@
-import nimgl/opengl, math, texture, colors
+import nimgl/opengl, math, texture
 
 proc compile(kind: GLenum, source: string): GLuint =
   result = glCreateShader(kind)
@@ -36,6 +36,9 @@ proc createProgram*(vert: string, frag: string): GLuint =
 
   glDeleteShader(vertexShader)
   glDeleteShader(fragmentShader)
+
+proc setUniform*(location: GLint, value: Natural) =
+  glUniform1ui(location, value.GLuint)
 
 proc setUniform*(location: GLint, value: float32) =
   glUniform1f(location, value)

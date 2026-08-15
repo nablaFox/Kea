@@ -11,6 +11,18 @@ type
   Mat3* = Matrix[3, 3]
   Mat4* = Matrix[4, 4]
 
+template x*(v: Vec2 | Vec3 | Vec4): untyped =
+  v[0]
+
+template y*(v: Vec2 | Vec3 | Vec4): untyped =
+  v[1]
+
+template z*(v: Vec3 | Vec4): untyped =
+  v[2]
+
+template w*(v: Vec4): untyped =
+  v[3]
+
 proc vec*[C: static int](value: float32): Vec[C] =
   for i in 0..<C:
     result[i] = value
@@ -70,8 +82,20 @@ proc cross*(a, b: Vec3): Vec3 =
     a[0] * b[1] - a[1] * b[0],
   ]
 
+proc perpendicular*(v: Vec3): Vec3 =
+  if v.x != 0 or v.y != 0: [-v.y, v.x, 0]
+  else: [1'f, 0, 0]
+
 proc reflect*(v, normal: Vec3): Vec3 =
   v - normal * 2.0 * dot(v, normal)
+
+proc rotate*(axis: Vec3, theta: float32, phi: float32): Vec3 =
+  let t = axis.perpendicular
+  let b = cross(t, axis)
+
+  let r = t * cos(phi) + b * sin(phi)
+
+  axis * cos(theta) + r * sin(theta)
 
 proc `*`*[R, N, C: static int](
   a: Matrix[R, N],
@@ -138,18 +162,6 @@ proc det*(m: Mat3): float32 =
   m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) -
   m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +
   m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])
-
-template x*(v: Vec2 | Vec3 | Vec4): untyped =
-  v[0]
-
-template y*(v: Vec2 | Vec3 | Vec4): untyped =
-  v[1]
-
-template z*(v: Vec3 | Vec4): untyped =
-  v[2]
-
-template w*(v: Vec4): untyped =
-  v[3]
 
 proc vec2*(value: float32): Vec2 = vec[2](value)
 

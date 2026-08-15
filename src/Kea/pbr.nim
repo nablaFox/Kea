@@ -150,19 +150,12 @@ type PBRGlobals* = tuple[
 type PBRRenderer* = Renderer[PBRGlobals, PBRMaterial]
 
 proc new*(storage: MeshStorage): PBRRenderer = 
-  const options = TextureOptions(
-    minFilter: GL_LINEAR,
-    magFilter: GL_LINEAR,
-    wrapS: GL_CLAMP_TO_EDGE,
-    wrapT: GL_CLAMP_TO_EDGE
-  )
-
   let ltcInverseMatrixLut = texture.new(
     ltc.InverseMatrixData,
     ltc.LutSize,
     ltc.LutSize,
     Rgba32Float,
-    options
+    LinearTextureOptions
   )
 
   let ltcMagnitudeFresnelLut = texture.new(
@@ -170,7 +163,7 @@ proc new*(storage: MeshStorage): PBRRenderer =
     ltc.LutSize,
     ltc.LutSize,
     Rg32Float,
-    options
+    LinearTextureOptions
   )
 
   result = renderer.new[PBRGlobals, PBRMaterial](

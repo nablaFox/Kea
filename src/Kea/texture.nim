@@ -8,7 +8,9 @@ type
   ColorFormat* = enum
     Rgba8Linear
     Rgba8Srgb
+    R32Float
     Rg32Float
+    Rgb32Float
     Rgba32Float
 
   DepthFormat* = enum
@@ -41,6 +43,25 @@ type
 
   Texture*[K: static TextureKind] = ref TextureObj[K]
 
+  ColorTexture* = Texture[ColorKind]
+
+  DepthTexture* = Texture[DepthKind]
+
+const
+  DataTextureOptions* = TextureOptions(
+    minFilter: GL_NEAREST,
+    magFilter: GL_NEAREST,
+    wrapS: GL_CLAMP_TO_EDGE,
+    wrapT: GL_CLAMP_TO_EDGE,
+  )
+
+  LinearTextureOptions* = TextureOptions(
+    minFilter: GL_LINEAR,
+    magFilter: GL_LINEAR,
+    wrapS: GL_CLAMP_TO_EDGE,
+    wrapT: GL_CLAMP_TO_EDGE,
+  )
+
 proc `=destroy`[K: static TextureKind](texture: var TextureObj[K]) =
   {.cast(raises: []).}:
     if texture.handle != 0:
@@ -50,10 +71,6 @@ proc `=destroy`[K: static TextureKind](texture: var TextureObj[K]) =
     if texture.id != 0:
       glDeleteTextures(1, addr texture.id)
       texture.id = 0
-
-type
-  ColorTexture* = Texture[ColorKind]
-  DepthTexture* = Texture[DepthKind]
 
 proc info(format: ColorFormat): TextureInfo =
   case format
@@ -71,10 +88,24 @@ proc info(format: ColorFormat): TextureInfo =
       sourceType: GL_UNSIGNED_BYTE,
     )
 
+  of R32Float:
+    result = (
+      internalFormat: GL_R32F.GLint,
+      sourceFormat: GL_RED,
+      sourceType: EGL_FLOAT,
+    )
+
   of Rg32Float:
     result = (
       internalFormat: GL_RG32F.GLint,
       sourceFormat: GL_RG,
+      sourceType: EGL_FLOAT,
+    )
+
+  of Rgb32Float:
+    result = (
+      internalFormat: GL_RGB32F.GLint,
+      sourceFormat: GL_RGB,
       sourceType: EGL_FLOAT,
     )
 
@@ -211,7 +242,7 @@ proc new*(
   doAssert data.len > 0
 
   result = new(
-    cast[pointer](unsafeAddr data[0]),
+    addr data[0],
     width,
     height,
     format,
@@ -227,7 +258,7 @@ proc new*(
   doAssert data.len > 0
 
   result = new(
-    cast[pointer](unsafeAddr data[0]),
+    addr data[0],
     width,
     height,
     format,
@@ -240,7 +271,7 @@ proc new*(
   options: TextureOptions,
 ): ColorTexture =
   result = new(
-    cast[pointer](nil),
+    nil,
     width,
     height,
     format,
@@ -253,12 +284,84 @@ proc new*(
   options: TextureOptions,
 ): DepthTexture =
   result = new(
-    cast[pointer](nil),
+    nil,
     width,
     height,
     format,
     options,
   )
+
+proc update*[K: static TextureKind](
+  texture: Texture[K],
+  data: pointer,
+  x, y: Natural,
+  width, height: Natural
+) =
+  doAssert data != nil
+  doAssert width > 0
+  doAssert height > 0
+  doAssert x + width <= texture.width
+  doAssert y + height <= texture.height
+
+  let info = texture.format.info
+
+  var previousTexture: GLint
+
+  glGetIntegerv(
+    GL_TEXTURE_BINDING_2D,
+    addr previousTexture,
+  )
+
+  glBindTexture(
+    GL_TEXTURE_2D,
+    texture.id,
+  )
+
+  glTexSubImage2D(
+    GL_TEXTURE_2D,
+    0,
+    x.GLint,
+    y.GLint,
+    width.GLsizei,
+    height.GLsizei,
+    info.sourceFormat,
+    info.sourceType,
+    data,
+  )
+
+  glBindTexture(
+    GL_TEXTURE_2D,
+    previousTexture.GLuint,
+  )
+
+proc update*(texture: Texture, data: pointer) = 
+  texture.update(data, 0, 0, texture.width, texture.height)
+
+proc update*(
+  texture: ColorTexture,
+  data: openArray[float32]
+) = 
+  let components = 
+    case texture.format
+    of R32Float:
+      1
+    of Rg32Float:
+      2
+    of Rgb32Float:
+      3
+    of Rgba32Float:
+      4
+    else:
+      doAssert false, "Unsupported color format for float32 data"
+      0
+
+  echo "ok"
+
+  doAssert data.len == texture.width * texture.height * components,
+    "Texture data size does not match texture dimensions"
+
+  if data.len > 0:
+     texture.update(addr data[0])
 
 proc id*[K: static TextureKind](
   texture: Texture[K],

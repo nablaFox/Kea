@@ -11,10 +11,10 @@ import
     mesh, 
     input,
     colors,
-    orbit
+    orbit,
+    texture
   ], 
-  std/math as stdmath,
-  nimgl/opengl
+  std/math as stdmath
 
 export 
   target,
@@ -29,4 +29,5 @@ export
   mesh, 
   input,
   colors,
-  orbit
+  orbit,
+  texture
