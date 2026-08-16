@@ -212,3 +212,6 @@ proc roll*(value: float32): Mat3 =
     [sr, cr, 0.0],
     [0.0, 0.0, 1.0],
   ]
+
+proc lerp*(a, b: float32, t: float32): float32 =
+  a + (b - a) * t

@@ -28,6 +28,13 @@ proc setCursorMode*(window: Window, mode: CursorMode) =
   window.cursorMode = mode
   window.handle.setInputMode(GLFWCursorSpecial, mode.glfwCursorMode)
 
+proc rebaseMouse(window: Window) =
+  var x, y: float64
+  window.handle.getCursorPos(addr x, addr y)
+
+  window.mouse.position = [x.float32, y.float32]
+  window.mouse.delta = [0.0'f, 0.0]
+
 proc new*(
   width: Natural,
   height: Natural,
@@ -117,6 +124,7 @@ proc new*(
 
       window.width = width
       window.height = height
+      window.rebaseMouse()
   )
 
   discard handle.setFramebufferSizeCallback(
@@ -142,6 +150,17 @@ proc new*(
         xOffset.float32,
         yOffset.float32
       ]
+  )
+
+  discard handle.setWindowPosCallback(
+    proc(
+      handle: GLFWWindow,
+      x, y: int32
+    ) {.cdecl.} =
+      let window =
+        cast[Window](handle.getWindowUserPointer())
+
+      window.rebaseMouse()
   )
 
 proc shouldClose*(window: Window): bool =

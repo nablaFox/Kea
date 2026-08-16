@@ -1,4 +1,4 @@
-import renderer, mesh, math, ltc, texture, nimgl/opengl
+import renderer, mesh, math, ltc, texture
 
 const 
   PbrVert = """

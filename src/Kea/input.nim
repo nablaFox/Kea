@@ -10,6 +10,7 @@ type
     Left
     Right
     LeftShift
+    LeftAlt
     A
     B
     C
@@ -46,6 +47,8 @@ type
     Seven
     Eight
     Nine
+    Home
+    Enter
 
   MouseButton* = enum
     Left
@@ -94,6 +97,7 @@ proc glfwKey*(key: Key): int32 =
   of Left: int32(GLFWKey.Left)
   of Right: int32(GLFWKey.Right)
   of LeftShift: int32(GLFWKey.LeftShift)
+  of LeftAlt: int32(GLFWKey.LeftAlt)
   of A: int32(GLFWKey.A)
   of B: int32(GLFWKey.B)
   of C: int32(GLFWKey.C)
@@ -130,6 +134,8 @@ proc glfwKey*(key: Key): int32 =
   of Seven: int32(GLFWKey.K7)
   of Eight: int32(GLFWKey.K8)
   of Nine: int32(GLFWKey.K9)
+  of Home: int32(GLFWKey.Home)
+  of Enter: int32(GLFWKey.Enter)
 
 proc glfwCursorMode*(mode: CursorMode): int32 =
   case mode

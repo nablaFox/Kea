@@ -1,18 +1,130 @@
 import Kea, std/[random, sequtils]
 
-type SlabMaterial = tuple[
+type McmlMaterial = tuple[
   transmittance: ColorTexture,
   diffuse: ColorTexture,
-  depth: float32
+  photons: uint32,
+  size: float32
 ]
 
+type Mcml = object
+  absorption: float32
+  scattering: float32
+  anisotropy: float32
+  depth: float32
+  resolution: Natural
+
+  transmittance: seq[float32]
+  diffuse: seq[float32]
+
+  renderer: Renderer[
+    tuple[view: Mat4, proj: Mat4], 
+    McmlMaterial
+  ]
+
+  slab: RenderItem[McmlMaterial]
+
 proc add(
-  renderer: Renderer[tuple[view: Mat4, proj: Mat4], SlabMaterial],
+  kea: Kea,
   resolution: Natural,
   transform: Transform,
-  depth: float32
-): RenderItem[SlabMaterial] =
-  renderer.add(
+  depth: float32,
+  size: float32,
+  absorption: float32,
+  scattering: float32,
+  anisotropy: float32
+): Mcml =
+  let renderer = kea.newRenderer(
+    material = McmlMaterial,
+    globals = (
+      view: Identity4,
+      proj: Identity4
+    ),
+    vert = """
+      uniform mat4 view;
+      uniform mat4 proj;
+
+      out vec3 ObjectNormal;
+      out vec3 WorldNormal;
+      out vec2 UV;
+
+      void main() {
+        gl_Position =
+          proj * view * model * vec4(position, 1.0);
+
+        ObjectNormal = normal;
+        WorldNormal = normalize(nmat * normal);
+        UV = uv;
+      }
+    """,
+    frag = """
+      in vec3 ObjectNormal;
+      in vec3 WorldNormal;
+      in vec2 UV;
+
+      out vec4 FragColor;
+
+      layout(bindless_sampler)
+      uniform sampler2D transmittance;
+
+      layout(bindless_sampler)
+      uniform sampler2D diffuse;
+
+      uniform uint photons;
+      uniform float size;
+
+      float tonemap(float x) {
+        const float exposure = 1.0;
+        return 1.0 - exp(-x * exposure);
+      }
+
+      float powerDensity(sampler2D tex, vec2 uv) {
+        ivec2 res = textureSize(tex, 0);
+
+        float texelArea = 
+          (size / float(res.x)) *
+          (size / float(res.y));
+
+        return texture(tex, uv).r / (float(photons) * texelArea);
+      }
+
+      void main() {
+        vec3 color;
+
+        if (ObjectNormal.x > 0.99) {
+          float T = powerDensity(transmittance, UV);
+
+          vec3 transmissionColor = vec3(0.20, 0.65, 0.95);
+
+          color = transmissionColor * tonemap(T);
+        } else if (ObjectNormal.x < -0.99) {
+          float D = powerDensity(diffuse, UV);
+
+          vec3 diffuseColor = vec3(0.35, 0.55, 1.0);
+
+          color = diffuseColor * tonemap(D);
+        } else {
+          vec3 N = normalize(WorldNormal);
+          vec3 L = normalize(vec3(0.4, 0.8, 0.6));
+
+          float ndotl = max(dot(N, L), 0.0);
+
+          float lighting = 0.35 + 0.65 * ndotl;
+
+          vec3 slabColor = vec3(0.28, 0.42, 0.48);
+
+          color = slabColor * lighting;
+        }
+
+        FragColor = vec4(
+          pow(max(color, vec3(0.0)), vec3(1.0 / 2.2)),
+          1.0
+        );
+      }
+    """
+  )
+
+  let slab = renderer.add(
     Cube,
     (
       transmittance: texture.new(
@@ -27,25 +139,44 @@ proc add(
         format = R32Float,
         DataTextureOptions
       ),
-      depth: depth
+      photons: 0'u32,
+      size: size
     ),
     transform
   )
 
-proc mcml(
-  slab: RenderItem[SlabMaterial], 
-  size: float32,
-  passes: Natural, 
-  photons: Natural,
-  absorption: float32,
-  scattering: float32,
-  anisotropy: float32,
-) =
-  let N = slab.material.transmittance.width
-  let depth = slab.material.depth
+  Mcml(
+    absorption: absorption,
+    scattering: scattering,
+    anisotropy: anisotropy,
+    depth: depth,
+    resolution: resolution,
 
-  var transmittance = newSeq[float32](N * N) 
-  var diffuse = newSeq[float32](N * N)
+    transmittance: newSeq[float32](resolution * resolution),
+    diffuse: newSeq[float32](resolution * resolution),
+
+    renderer: renderer,
+    slab: slab
+  )
+
+proc render(mcml: Mcml, backbuffer: RenderTarget, camera: Camera) = 
+  mcml.renderer.view = camera.view
+  mcml.renderer.proj = camera.proj(backbuffer.aspect)
+
+  mcml.slab.scale = block:
+    let s = mcml.slab.material.size
+    [mcml.depth, s, s]
+
+  mcml.renderer.render(backbuffer)
+
+proc update(mcml: var Mcml, photons: Natural) = 
+  let 
+    N = mcml.resolution
+    depth = mcml.depth
+    absorption = mcml.absorption
+    scattering = mcml.scattering
+    anisotropy = mcml.anisotropy
+    size = mcml.slab.material.size
 
   proc photonRandomWalk(): tuple[
     weight: float32, 
@@ -86,164 +217,67 @@ proc mcml(
 
       let phi = 2 * PI * rand(1.0)
 
-      dir = dir.rotate(
-        arccos(cosTheta.clamp(-1.0'f, 1.0'f)), 
-        phi
-      ) 
+      let theta = arccos cosTheta.clamp(-1.0'f, 1.0'f)
 
-      dir = dir.normalize
+      dir = dir.rotate(theta, phi).normalize
 
     (weight: weight, pos: pos, dir: dir)
     
-  for n in 0..<passes:
-    for i in 0..<photons:
-      let (weight, pos, dir) = photonRandomWalk()
+  for i in 0..<photons:
+    let (weight, pos, dir) = photonRandomWalk()
 
-      # mappping [-size/2, size/2] x [-size/2, size/2] -> [0, N] x [0, N]
-      let i = int(N.float32 * (pos.x + size / 2) / size)
-      let j = int(N.float32 * (pos.y + size / 2) / size)
+    # mappping [-size/2, size/2] x [-size/2, size/2] -> [0, N] x [0, N]
+    let i = int(N.float32 * (pos.x + size / 2) / size)
+    let j = int(N.float32 * (pos.y + size / 2) / size)
 
-      if i < 0 or i >= N or j < 0 or j >= N:
-        continue
+    if i < 0 or i >= N or j < 0 or j >= N:
+      continue
 
-      if dir.z < 0: diffuse[j * N + i] += weight
-      else: transmittance[j * N + i] += weight
+    let index = j * N + i
 
-  for i in 0..<N*N:
-    transmittance[i] /= passes.float32
-    diffuse[i] /= passes.float32
+    if dir.z < 0: mcml.diffuse[index] += weight
+    else: mcml.transmittance[index] += weight
 
-  slab.material.transmittance.update(transmittance)
-  slab.material.diffuse.update(diffuse)
+  mcml.slab.material.photons += photons.uint32
 
-proc render(
-  renderer: Renderer[tuple[view: Mat4, proj: Mat4], SlabMaterial], 
-  backbuffer: RenderTarget, 
-  camera: Camera
-) =
-  renderer.view = camera.view
-  renderer.proj = camera.proj(backbuffer.aspect)
-
-  renderer.render(backbuffer)
-
-randomize()
+  mcml.slab.material.transmittance.update(mcml.transmittance)
+  mcml.slab.material.diffuse.update(mcml.diffuse)
 
 let kea = init(
   width = 800, 
   height = 600, 
-  title = "mcml"
+  title = "mcml",
+  cursor = Disabled
 )
 
-let renderer = kea.newRenderer(
-  material = SlabMaterial,
-  globals = (
-    view: Identity4,
-    proj: Identity4
-  ),
-  vert = """
-    uniform mat4 view;
-    uniform mat4 proj;
-    uniform float depth;
-
-    out vec3 ObjectNormal;
-    out vec3 WorldNormal;
-    out vec2 UV;
-
-    void main() {
-      mat4 depthMat = mat4(1.0);
-
-      depthMat[0][0] = depth;
-
-      gl_Position =
-        proj * view * model * depthMat * vec4(position, 1.0);
-
-      ObjectNormal = normal;
-      WorldNormal = normalize(nmat * normal);
-      UV = uv;
-    }
-  """,
-  frag = """
-    in vec3 ObjectNormal;
-    in vec3 WorldNormal;
-    in vec2 UV;
-
-    out vec4 FragColor;
-
-    layout(bindless_sampler)
-    uniform sampler2D transmittance;
-
-    layout(bindless_sampler)
-    uniform sampler2D diffuse;
-
-    void main() {
-      vec3 color;
-
-      if (ObjectNormal.x > 0.99) {
-        float T = texture(transmittance, UV).r;
-
-        vec3 transmissionColor = vec3(0.25, 0.80, 0.65);
-
-        color = transmissionColor * T;
-      } else if (ObjectNormal.x < -0.99) {
-        float D = texture(diffuse, UV).r;
-
-        vec3 diffuseColor = vec3(0.35, 0.55, 1.0);
-
-        color = diffuseColor * D;
-      } else {
-        vec3 N = normalize(WorldNormal);
-        vec3 L = normalize(vec3(0.4, 0.8, 0.6));
-
-        float ndotl = max(dot(N, L), 0.0);
-
-        float lighting = 0.35 + 0.65 * ndotl;
-
-        vec3 slabColor = vec3(0.28, 0.42, 0.48);
-
-        color = slabColor * lighting;
-      }
-
-      FragColor = vec4(
-        pow(max(color, vec3(0.0)), vec3(1.0 / 2.2)),
-        1.0
-      );
-    }
-  """
-)
-
-let slab = renderer.add(
+var mcml = kea.add(
   resolution = 512,
-  depth = 0.05'f,
+  depth = 0.03'f,
   transform = transform.new(
     y = 1,
-    yaw = -PI / 2
-  )
+    yaw = PI / 2
+  ),
+  absorption = 2'f,
+  scattering = 3'f,
+  anisotropy = 0.75'f,
+  size = 0.5'f
 )
 
 var orbit = orbit.new(
   camera.new(Perspective),
   target = [0.0'f, 1.0, 0.0], 
-  distance = 8.0
+  distance = 1.0
 )
 
+randomize()
+
 for frame in kea.frames:
-  if frame.keyboard.pressed(Escape):
-    break 
-
-  if frame.keyboard.pressed(Space):
-    slab.mcml(
-      size = 0.5'f,
-      passes = 128, 
-      photons = 100_000,
-      absorption = 2'f,
-      scattering = 3'f,
-      anisotropy = 0.75'f
-    )
-
-  frame.backbuffer.clear(color = White * 0.1)
+  mcml.update(photons = 10_000)
 
   orbit.update(frame)
 
-  renderer.render(frame.backbuffer, orbit.camera)
+  frame.backbuffer.clear(color = White * 0.1)
+
+  mcml.render(frame.backbuffer, orbit.camera)
 
   frame.present()
