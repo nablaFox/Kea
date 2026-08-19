@@ -1,3 +1,5 @@
+# chat-gpt generated
+
 import Kea/math
 import std/algorithm
 

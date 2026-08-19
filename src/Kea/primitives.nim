@@ -77,12 +77,12 @@ const SphereMesh* = block:
 
       geometry.indices.add [
         Index(topLeft),
-        Index(bottomLeft),
         Index(topRight),
+        Index(bottomLeft),
 
         Index(topRight),
-        Index(bottomLeft),
         Index(bottomRight),
+        Index(bottomLeft),
       ]
 
   geometry

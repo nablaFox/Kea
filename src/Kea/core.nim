@@ -97,6 +97,12 @@ proc newRenderer*[G, M](
 
 proc add*(
   kea: Kea,
+  item: RenderItem[PBRMaterial],
+): RenderItem[PBRMaterial] =
+  kea.pbr.add(item)
+
+proc add*(
+  kea: Kea,
   primitive: Primitive,
   material: PBRMaterial,
   transform = Identity,
@@ -124,6 +130,46 @@ proc add*(
 ): RenderItem[PBRMaterial] =
   kea.pbr.add(
     primitive,
+    material,
+    x = x,
+    y = y,
+    z = z,
+    pitch = pitch,
+    yaw = yaw,
+    roll = roll,
+    scale = scale,
+    topology
+  )
+
+proc add*(
+  kea: Kea,
+  mesh: Mesh,
+  material: PBRMaterial,
+  transform = Identity,
+  topology = Triangles,
+): RenderItem[PBRMaterial] =
+  kea.pbr.add(
+    mesh,
+    material,
+    transform,
+    topology
+  )
+
+proc add*(
+  kea: Kea,
+  mesh: Mesh,
+  material: PBRMaterial,
+  x: float32 = 0.0,
+  y: float32 = 0.0,
+  z: float32 = 0.0,
+  yaw: float32 = 0.0,
+  pitch: float32 = 0.0,
+  roll: float32 = 0.0,
+  scale: float32 = 1.0,
+  topology = Triangles,
+): RenderItem[PBRMaterial] =
+  kea.pbr.add(
+    mesh,
     material,
     x = x,
     y = y,

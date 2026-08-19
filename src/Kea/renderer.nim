@@ -173,6 +173,13 @@ proc render*[G, M, K](
 
 proc add*[G, M](
   renderer: Renderer[G, M],
+  item: RenderItem[M]
+): RenderItem[M] =
+  renderer.items.add(item)
+  item
+
+proc add*[G, M](
+  renderer: Renderer[G, M],
   mesh: Mesh,
   material = M.default,
   transform = Identity,

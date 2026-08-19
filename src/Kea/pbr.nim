@@ -1,7 +1,7 @@
 import renderer, mesh, math, ltc, texture
 
 const 
-  PbrVert = """
+  PbrVert* = """
 uniform mat4 view;
 uniform mat4 proj;
 
@@ -34,9 +34,10 @@ layout(bindless_sampler)
 uniform sampler2D ltcMagnitudeFresnelLut;
 
 struct RectLight {
-  vec3 position;
+  vec3 position; // center
   mat3 rotation;
-  vec2 size;
+  float width;
+  float height;
   vec3 radiance;
 };
 
@@ -44,83 +45,177 @@ uniform RectLight light;
 
 out vec4 FragColor;
 
-// TEMP
-vec3 lightPos = light.position;
-vec3 lightColor = light.radiance;
+struct Polygon {
+  vec3 vertices[5];
+  int count;
+};
 
-vec3 fresnelSchlick(vec3 H, vec3 V, vec3 F0) {
-  float cosTheta = max(dot(H, V), 0.0);
-  return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+Polygon clipAgainstHorizon(vec3 vertices[4]) {
+  Polygon clipped;
+  clipped.count = 0;
+
+  for (int i = 0; i < 4; ++i) {
+    vec3 a = vertices[i];
+    vec3 b = vertices[(i + 1) % 4];
+
+    bool aInside = a.z > 0.0;
+    bool bInside = b.z > 0.0;
+
+    if (aInside) {
+      clipped.vertices[clipped.count++] = a;
+    }
+
+    if (aInside != bInside) {
+      float t = a.z / (a.z - b.z);
+      clipped.vertices[clipped.count++] = mix(a, b, t);
+    }
+  }
+
+  return clipped;
 }
 
-float distributionGGX(vec3 N, vec3 H) {
-  float a = roughness * roughness;
-  float a2 = a * a;
+vec3[4] lightCorners(RectLight light) {
+  vec3 right = light.rotation * vec3(-1.0, 0.0, 0.0);
+  vec3 up = light.rotation * vec3(0.0, 1.0, 0.0);
 
-  float NdotH = max(dot(N, H), 0.0);
-  float NdotH2 = NdotH * NdotH;
+  vec3 x = right * (light.width / 2.0);
+  vec3 y = up * (light.height / 2.0);
+  vec3 center = light.position;
 
-  float denom = NdotH2 * (a2 - 1.0) + 1.0;
-
-  return a2 / max(PI * denom * denom, 0.000001);
+  return vec3[4](
+    center - y - x,
+    center + x - y,
+    center + x + y,
+    center - x + y 
+  );
 }
 
-float geometrySchlickGGX(float cosTheta) {
-  float r = (roughness + 1.0);
-  float k = (r * r) / 8.0;
-
-  return cosTheta / (cosTheta * (1.0 - k) + k);
+vec2 texelCenteredCoordinates(float x, float y) {
+  vec2 size = vec2(textureSize(ltcInverseMatrixLut, 0));
+  return (vec2(x, y) * (size - 1.0) + 0.5) / size;
 }
 
-float geometrySmith(vec3 N, vec3 V, vec3 L) {
-  float NdotV = max(dot(N, V), 0.0);
-  float NdotL = max(dot(N, L), 0.0);
+vec3 stableTangentToward(vec3 V, vec3 N) {
+  vec3 T = V - N * dot(V, N);
+  float lengthSquared = dot(T, T);
 
-  float ggx2 = geometrySchlickGGX(NdotV);
-  float ggx1 = geometrySchlickGGX(NdotL);
+  if (lengthSquared > 1e-10) {
+    return T * inversesqrt(lengthSquared);
+  }
 
-  return ggx1 * ggx2;
+  vec3 helper =
+    abs(N.z) < 0.999
+      ? vec3(0.0, 0.0, 1.0)
+      : vec3(0.0, 1.0, 0.0);
+
+  return normalize(cross(helper, N));
 }
 
-float computeAttenuation(vec3 lightPos) {
-  float distance = length(lightPos - WorldPos);
-  return 1 / (distance * distance);
+float edgeIntegral(vec3 v1, vec3 v2) {
+  float x = dot(v1, v2);
+  float y = abs(x);
+
+  float a = 0.8543985 + (0.4965155 + 0.0145206 * y) * y;
+  float b = 3.4175940 + (4.1616724 + y) * y;
+
+  float theta_sintheta = a / b;
+
+  if (x <= 0.0) {
+    theta_sintheta = 0.5 * inversesqrt(max(1.0 - x * x, 1e-7)) - theta_sintheta;
+  }
+
+  return cross(v1, v2).z * theta_sintheta;
+}
+
+float integrateRect(vec3 P, vec3 N, vec3 V, vec3 corners[4], mat3 inverseLtc) {
+  vec3 tangent = stableTangentToward(V, N);
+  vec3 bitangent = cross(N, tangent);
+
+  mat3 worldToSurface = transpose(mat3(tangent, bitangent, N));
+
+  vec3 cosineCorners[4];
+
+  for (int i = 0; i < 4; i++) {
+    cosineCorners[i] = inverseLtc * worldToSurface * (corners[i] - P);
+  }
+
+  Polygon polygon = clipAgainstHorizon(cosineCorners);
+
+  if (polygon.count < 3) {
+    return 0.0;
+  }
+
+  for (int i = 0; i < polygon.count; i++) {
+    polygon.vertices[i] = normalize(polygon.vertices[i]);
+  }
+
+  float integral = 0.0;
+
+  for (int i = 0; i < polygon.count; i++) {
+    vec3 v1 = polygon.vertices[i];
+    vec3 v2 = polygon.vertices[(i + 1) % polygon.count];
+
+    integral += edgeIntegral(v1, v2);
+  }
+
+  return max(0.0, integral);
+}
+
+vec3 rectLight(vec3 P, vec3 N, vec3 V) {
+  float NdotV = dot(N, V);
+
+  vec2 uv = texelCenteredCoordinates(
+      roughness,
+      sqrt(1 - clamp(NdotV, 0, 1))
+  );
+
+  vec4 shape = texture(ltcInverseMatrixLut, uv);
+  vec2 terms = texture(ltcMagnitudeFresnelLut, uv).xy;
+
+  vec3 F0 = mix(vec3(0.04), albedo, metallic);
+
+  vec3 specularScale = F0 * terms.x + (1 - F0) * terms.y;
+
+  vec3 corners[4] = lightCorners(light);
+
+  mat3 inverseTransform = mat3(
+    shape.x, 0, shape.y,
+    0, 1, 0,
+    shape.z, 0, shape.w
+  );
+
+  float specularIntegral = integrateRect(
+    P, N, V,
+    corners,
+    inverseTransform
+  );
+
+  float diffuseIntegral = integrateRect(
+    P, N, V,
+    corners,
+    mat3(1.0)
+  );
+
+  vec3 specular = specularScale * specularIntegral;
+
+  vec3 diffuseColor = albedo * (1.0 - metallic);
+  vec3 diffuse = diffuseColor * diffuseIntegral;
+
+  return light.radiance * (specular + diffuse);
 }
 
 void main() {
+  vec3 P = WorldPos;
+  vec3 V = normalize(eye - P);
+
   vec3 N = normalize(Normal);
-  vec3 V = normalize(eye - WorldPos);
-  vec3 L = normalize(lightPos - WorldPos);
-  vec3 H = normalize(V + L);
-
-  if (!gl_FrontFacing) {
-      N = -N;
-  }
-
-  float attenuation = computeAttenuation(lightPos);
-
-  vec3 radiance = lightColor * attenuation;
-
-  float D = distributionGGX(N, H);
-  float G = geometrySmith(N, V, L);
-
-  vec3 F0 = mix(vec3(0.04), albedo, metallic);
-  vec3 F = fresnelSchlick(H, V, F0);
-
-  vec3 ks = F;
-  vec3 kd = (vec3(1.0) - F) * (1.0 - metallic);
-
-  vec3 specular = ks * D * G / (4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001);
-
-  vec3 diffuse = kd * albedo / PI;
-
-  vec3 Lo = (specular + diffuse) * radiance * max(dot(N, L), 0.0);
+  N = faceforward(N, -V, N);
 
   vec3 ambient = vec3(0.03) * albedo;
-  vec3 color = ambient + Lo;
+  vec3 color = ambient + rectLight(P, N, V);
 
   color = color / (color + vec3(1.0));
-  color = pow(color, vec3(1.0/2.2));
+  color = pow(color, vec3(1.0 / 2.2));
 
   FragColor = vec4(color, 1.0);
 }
@@ -129,7 +224,8 @@ void main() {
 type RectLight* = object
   position*: Vec3
   rotation*: Mat3 = Identity3
-  size*: Vec2 = [1.0, 1.0]
+  width*: float32 = 1.0
+  height*: float32 = 1.0
   radiance*: Vec3
 
 type PBRMaterial* = tuple[

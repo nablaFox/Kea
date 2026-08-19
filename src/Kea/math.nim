@@ -31,6 +31,10 @@ proc `*`*[C: static int](v: Vec[C], scalar: float32): Vec[C] =
   for i in 0..<C:
     result[i] = v[i] * scalar
 
+proc `*`*[C: static int](scalar: float32, v: Vec[C]): Vec[C] =
+  for i in 0..<C:
+    result[i] = v[i] * scalar
+
 proc `*=`*[C: static int](v: var Vec[C], scalar: float32) =
   for i in 0..<C:
     v[i] *= scalar

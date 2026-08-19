@@ -8,7 +8,8 @@ and professional studio.
 - BDRF with Cook-Torrance specular and lambertian diffuse (ok)
 - HDR (ok)
 - Gamma correction (ok)
-- Area light & dynamic shadows
+- Area light (ok)
+- Rynamic shadows
 - Planar reflections
 - Diffuse IBL
 - Specular IBL
