@@ -9,15 +9,14 @@ and professional studio.
 - HDR (ok)
 - Gamma correction (ok)
 - Area light (ok)
-- Rynamic shadows
-- Planar reflections
+- Dynamic shadows
 - Diffuse IBL
 - Specular IBL
-- Anisotropic BDRF
 - GTAO
 - Multiple scattering energy compensation
 - Lagarde specular AO
 - horizon specular occlusion
+- Anisotropic BDRF
 
 ## References
 
@@ -28,15 +27,18 @@ Cook-torrance bdrf:
 - https://learnopengl.com/PBR/Lighting
 - https://pbr-book.org/4ed/Radiometry,_Spectra,_and_Color/Radiometry
 
-Area Light & dynamic shadows:
+Area Light:
 
 - https://eheitzresearch.wordpress.com/415-2/
 - https://learnopengl.com/Guest-Articles/2022/Area-Lights
 - https://hal.science/hal-01458129v1/document
 - https://cdn.iiit.ac.in/cdn/cvit.iiit.ac.in/images/ConferencePapers/2022/Bringing_ggx.pdf
-- https://research.nvidia.com/sites/default/files/pubs/2018-05_Combining-Analytic-Direct//I3D2018_combining.pdf
 - https://advances.realtimerendering.com/s2016/s2016_ltc_fresnel.pdf
 - https://advances.realtimerendering.com/s2016/s2016_ltc_rnd.pdf
+
+Dynamic shadows:
+
+- https://research.nvidia.com/sites/default/files/pubs/2018-05_Combining-Analytic-Direct//I3D2018_combining.pdf
 
 Others:
 
