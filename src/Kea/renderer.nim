@@ -1,43 +1,14 @@
-import nimgl/opengl, mesh, shader, transform, math, primitives, target
-
-{.experimental: "dotOperators".}
-
-const VertexHeader = """
-#version 330 core
-#extension GL_ARB_bindless_texture : enable
-
-layout (location = 0) in vec3 position;
-layout (location = 1) in vec3 normal;
-layout (location = 2) in vec3 color;
-layout (location = 3) in vec2 uv;
-
-const float PI = 3.14159265359;
-
-uniform mat4 model;
-uniform mat3 nmat;
-"""
-
-const FragHeader = """
-#version 330 core
-#extension GL_ARB_bindless_texture : enable
-
-const float PI = 3.14159265359;
-
-vec3 palette(float t) {
-  t = clamp(t, 0.0, 1.0);
-
-  vec3 dark   = vec3(0.045, 0.014, 0.070);
-  vec3 purple = vec3(0.250, 0.105, 0.330);
-  vec3 blue   = vec3(0.110, 0.360, 0.550);
-  vec3 teal   = vec3(0.120, 0.650, 0.610);
-  vec3 light  = vec3(0.700, 0.930, 0.820);
-
-  vec3 color = mix(dark, purple, smoothstep(0.0, 0.25, t));
-  color = mix(color, blue, smoothstep(0.20, 0.50, t));
-  color = mix(color, teal, smoothstep(0.45, 0.75, t));
-  return mix(color, light, smoothstep(0.70, 1.0, t));
-}
-"""
+import 
+  mesh, 
+  program, 
+  shader, 
+  transform, 
+  math, 
+  primitives, 
+  target,
+  texture,
+  std/typetraits,
+  nimgl/opengl
 
 type
   Renderable* = ref object
@@ -49,7 +20,11 @@ type
     drawable*: Renderable
     material*: M
 
-  RendererObj[G: tuple; M: tuple] = object
+  RendererObj[
+    G: tuple;
+    M: tuple;
+    A: tuple;
+  ] = object
     program: Program
     items: seq[RenderItem[M]]
     storage: MeshStorage
@@ -62,8 +37,12 @@ type
 
     globals*: G
 
-  Renderer*[G: tuple; M: tuple] = 
-    ref RendererObj[G, M]
+  Renderer*[
+    G: tuple;
+    M: tuple;
+    A: tuple;
+  ] = 
+    ref RendererObj[G, M, A]
 
   CullMode* = enum
     CullDisabled
@@ -76,13 +55,15 @@ type
     DepthLessEqual
     DepthAlways
 
-template `.`*[G, M](r: Renderer[G, M], field: untyped): untyped =
+{.experimental: "dotOperators".}
+
+template `.`*[G, M, A](r: Renderer[G, M, A], field: untyped): untyped =
   r.globals.field
 
-template `.=`*[G, M](r: Renderer[G, M], field: untyped, value: untyped) =
+template `.=`*[G, M, A](r: Renderer[G, M, A], field: untyped, value: untyped) =
   r.globals.field = value
 
-proc `=destroy`[G, M](r: var RendererObj[G, M]) =
+proc `=destroy`[G, M, A](r: var RendererObj[G, M, A]) =
   {.cast(raises: []).}:
     r.program.destroy()
     r.items = @[]
@@ -90,38 +71,102 @@ proc `=destroy`[G, M](r: var RendererObj[G, M]) =
     r.materialUniforms = @[]
     r.storage = nil
 
-proc new*[G, M](
-  storage: MeshStorage, 
-  frag: string, 
-  vert: string,
-  globals = G.default
-): Renderer[G, M] = 
+proc newFromSources[G: tuple; M: tuple; A: tuple](
+  storage: MeshStorage,
+  vertexSource: string,
+  fragmentSource: string,
+  globals: G
+): Renderer[G, M, A] =
   new(result)
 
-  let program = shader.new(
-    vert = VertexHeader & vert, 
-    frag = FragHeader & frag
-  )
+  result.program = program.new(vertexSource, fragmentSource)
 
-  result.globalUniforms = program.uniforms[:G]
-  result.materialUniforms = program.uniforms[:M]
+  result.globalUniforms = result.program.uniforms[:G]
+  result.materialUniforms = result.program.uniforms[:M]
 
-  result.modelUniform = program.uniform("model")
-  result.nmatUniform  = program.uniform("nmat")
-
-  result.program = program
+  result.modelUniform = result.program.uniform("model")
+  result.nmatUniform = result.program.uniform("nmat")
 
   result.globals = globals
-
   result.storage = storage
 
-proc render*[G, M, K](
-  renderer: Renderer[G, M], 
-  target: RenderTarget[K], 
+template new*[G, M, T, A](
+  storage: MeshStorage,
+  vert: VertShader[G, M, T],
+  frag: FragShader[G, M, T, A],
+  globals: G
+): Renderer[G, M, A] =
+  newFromSources[G, M, A](
+    storage,
+    vert.glsl,
+    frag.glsl,
+    globals
+  )
+
+template new*[G, M, T, A](
+  storage: MeshStorage,
+  vert: VertShader[G, M, T],
+  frag: FragShader[G, M, T, A]
+): Renderer[G, M, A] =
+  block:
+    var globals: G
+    new(storage, vert, frag, globals)
+
+
+template compatible(Output, Attachment: typedesc): bool =
+  when Attachment is ColorTexture[R32Float]:
+    Output is float32
+
+  elif Attachment is ColorTexture[Rg32Float]:
+    Output is Vec2
+
+  elif Attachment is ColorTexture[Rgb32Float]:
+    Output is Vec3
+
+  elif Attachment is ColorTexture[Rgba8Linear] or
+       Attachment is ColorTexture[Rgba8Srgb] or
+       Attachment is ColorTexture[Rgba32Float]:
+    Output is Vec4
+
+  else:
+    false
+
+proc render*[
+  G, M, A: tuple;
+  Atts: tuple;
+  K: static RenderTargetKind; 
+  D: static DepthFormat;
+](
+  renderer: Renderer[G, M, A], 
+  target: RenderTarget[K, Atts, D], 
   cullMode: CullMode = CullBack,
   depthTest: DepthTest = DepthLess,
   depthWrite: bool = true,
 ) = 
+  when K == BackBuffer:
+    when A.tupleLen != 1:
+      {.error: "Backbuffer requires exactly one fragment output".}
+
+    elif get(A, 0) isnot Vec4:
+      {.error: "Backbuffer fragment output must be Vec4".}
+
+  elif K == DepthOnly:
+    when A.tupleLen != 0:
+      {.error: "A depth-only target cannot have color outputs".}
+
+  else:
+    when A.tupleLen != Atts.tupleLen:
+      {.error: "Fragment output count does not match target attachment count".}
+
+    else:
+      for name, output, attachment in fieldPairs(
+        A.default,
+        Atts.default
+      ):
+        when not compatible(typeof(output), typeof(attachment)):
+          {.error: "Fragment output '" & name &
+            "' is incompatible with its target attachment".}
+ 
   target.use()
 
   when K in {BackBuffer, DepthOnly, ColorDepth}:
@@ -171,15 +216,15 @@ proc render*[G, M, K](
 
     drawable.mesh.draw(topology = drawable.topology)
 
-proc add*[G, M](
-  renderer: Renderer[G, M],
+proc add*[G, M, A](
+  renderer: Renderer[G, M, A],
   item: RenderItem[M]
 ): RenderItem[M] =
   renderer.items.add(item)
   item
 
-proc add*[G, M](
-  renderer: Renderer[G, M],
+proc add*[G, M, A](
+  renderer: Renderer[G, M, A],
   mesh: Mesh,
   material = M.default,
   transform = Identity,
@@ -201,8 +246,8 @@ proc add*[G, M](
 
   renderer.items.add(result)
 
-proc add*[G, M](
-  renderer: Renderer[G, M],
+proc add*[G, M, A](
+  renderer: Renderer[G, M, A],
   mesh: Mesh,
   material = M.default,
   x: float32 = 0.0,
@@ -229,8 +274,8 @@ proc add*[G, M](
     topology,
   )
 
-proc add*[G, M](
-    renderer: Renderer[G, M],
+proc add*[G, M, A](
+    renderer: Renderer[G, M, A],
     primitive: Primitive,
     material = M.default,
     transform = Identity,
@@ -243,8 +288,8 @@ proc add*[G, M](
     topology,
   )
 
-proc add*[G, M](
-  renderer: Renderer[G, M],
+proc add*[G, M, A](
+  renderer: Renderer[G, M, A],
   primitive: Primitive,
   material = M.default,
   x: float32 = 0.0,

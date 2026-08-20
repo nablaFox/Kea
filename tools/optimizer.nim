@@ -1,4 +1,4 @@
-# chat-gpt generated
+# chat-gpt generated (nelder-mead method)
 
 import Kea/math
 import std/algorithm

@@ -1,10 +1,6 @@
 import nimgl/opengl
 
 type
-  TextureKind* = enum
-    ColorKind
-    DepthKind
-
   ColorFormat* = enum
     Rgba8Linear
     Rgba8Srgb
@@ -29,24 +25,23 @@ type
     sourceType: GLenum,
   ]
 
-  TextureObj[K: static TextureKind] = object
+  TextureFormat = ColorFormat | DepthFormat
+
+  TextureObj[F: static; FT = typeof(F)] = object
     id: GLuint
     width: int
     height: int
-
-    when K == ColorKind:
-      format: ColorFormat
-      imageHandle: GLuint64
-    else:
-      format: DepthFormat
-
     sampleHandle: GLuint64
+    imageHandle: GLuint64
 
-  Texture*[K: static TextureKind] = ref TextureObj[K]
+  Texture*[F: static] =
+    ref TextureObj[F]
 
-  ColorTexture* = Texture[ColorKind]
+  ColorTexture*[F: static ColorFormat] =
+    Texture[F]
 
-  DepthTexture* = Texture[DepthKind]
+  DepthTexture*[F: static DepthFormat] =
+    Texture[F]
 
 const
   DataTextureOptions* = TextureOptions(
@@ -63,20 +58,60 @@ const
     wrapT: GL_CLAMP_TO_EDGE,
   )
 
-proc `=destroy`[K: static TextureKind](texture: var TextureObj[K]) =
+proc `=destroy`[F: static; FT](
+  texture: var TextureObj[F, FT]
+) =
   {.cast(raises: []).}:
     if texture.sampleHandle != 0:
       glMakeTextureHandleNonResidentARB(texture.sampleHandle)
       texture.sampleHandle = 0
 
-    when K == ColorKind:
-      if texture.imageHandle != 0:
-        glMakeImageHandleNonResidentARB(texture.imageHandle)
-        texture.imageHandle = 0
+    if texture.imageHandle != 0:
+      glMakeImageHandleNonResidentARB(texture.imageHandle)
+      texture.imageHandle = 0
 
     if texture.id != 0:
       glDeleteTextures(1, addr texture.id)
       texture.id = 0
+
+proc GLenum(format: ColorFormat): GLenum =
+  case format
+  of Rgba8Linear:
+    GL_RGBA8
+
+  of Rgba8Srgb:
+    GL_SRGB8_ALPHA8
+
+  of R32Float:
+    GL_R32F
+
+  of Rg32Float:
+    GL_RG32F
+
+  of Rgb32Float:
+    GL_RGB32F
+
+  of Rgba32Float:
+    GL_RGBA32F
+
+proc GLenum(format: DepthFormat): GLenum =
+  case format
+  of Depth24:
+    GL_DEPTH_COMPONENT24
+
+  of Depth32Float:
+    GL_DEPTH_COMPONENT32F
+
+proc components(format: ColorFormat): int =
+  case format
+  of Rgba8Linear, Rgba8Srgb, Rgba32Float:
+    4
+  of R32Float:
+    1
+  of Rg32Float:
+    2
+  of Rgb32Float:
+    3
 
 proc info(format: ColorFormat): TextureInfo =
   case format
@@ -138,12 +173,12 @@ proc info(format: DepthFormat): TextureInfo =
       sourceType: EGL_FLOAT,
     )
 
-proc createTexture[K: static TextureKind](
+proc createTexture[F: static](
   data: pointer,
   width, height: Natural,
   info: TextureInfo,
   options: TextureOptions,
-): Texture[K] =
+): Texture[F] =
   doAssert width > 0
   doAssert height > 0
 
@@ -210,26 +245,24 @@ proc createTexture[K: static TextureKind](
 proc new*(
   data: pointer,
   width, height: Natural,
-  format: ColorFormat,
+  format: static ColorFormat,
   options: TextureOptions,
-): ColorTexture =
-  result = createTexture[ColorKind](
+): ColorTexture[format] =
+  result = createTexture[format](
     data,
     width,
     height,
     format.info,
     options,
   )
-
-  result.format = format
 
 proc new*(
   data: pointer,
   width, height: Natural,
-  format: DepthFormat,
+  format: static DepthFormat,
   options: TextureOptions,
-): DepthTexture =
-  result = createTexture[DepthKind](
+): DepthTexture[format] =
+  result = createTexture[format](
     data,
     width,
     height,
@@ -237,14 +270,12 @@ proc new*(
     options,
   )
 
-  result.format = format
-
 proc new*(
   data: string,
   width, height: Natural,
-  format: ColorFormat,
+  format: static ColorFormat,
   options: TextureOptions,
-): ColorTexture =
+): ColorTexture[format] =
   doAssert data.len > 0
 
   result = new(
@@ -258,9 +289,9 @@ proc new*(
 proc new*(
   data: string,
   width, height: Natural,
-  format: DepthFormat,
+  format: static DepthFormat,
   options: TextureOptions,
-): DepthTexture =
+): DepthTexture[format] =
   doAssert data.len > 0
 
   result = new(
@@ -273,9 +304,9 @@ proc new*(
 
 proc new*(
   width, height: Natural,
-  format: ColorFormat,
+  format: static ColorFormat,
   options: TextureOptions,
-): ColorTexture =
+): ColorTexture[format] =
   result = new(
     nil,
     width,
@@ -286,9 +317,9 @@ proc new*(
 
 proc new*(
   width, height: Natural,
-  format: DepthFormat,
+  format: static DepthFormat,
   options: TextureOptions,
-): DepthTexture =
+): DepthTexture[format] =
   result = new(
     nil,
     width,
@@ -297,8 +328,8 @@ proc new*(
     options,
   )
 
-proc update*[K: static TextureKind](
-  texture: Texture[K],
+proc update*[F](
+  texture: Texture[F],
   data: pointer,
   x, y: Natural,
   width, height: Natural
@@ -309,7 +340,7 @@ proc update*[K: static TextureKind](
   doAssert x + width <= texture.width
   doAssert y + height <= texture.height
 
-  let info = texture.format.info
+  let info = info(F)
 
   var previousTexture: GLint
 
@@ -340,75 +371,42 @@ proc update*[K: static TextureKind](
     previousTexture.GLuint,
   )
 
-proc update*(texture: Texture, data: pointer) = 
-  texture.update(data, 0, 0, texture.width, texture.height)
+proc update*[F](
+  texture: Texture[F],
+  data: pointer
+) = 
+  texture.update(
+    data,
+    0,
+    0,
+    texture.width,
+    texture.height,
+  )
 
-proc update*(
-  texture: ColorTexture,
+proc update*[F: static ColorFormat](
+  texture: ColorTexture[F],
   data: openArray[float32]
 ) = 
-  let components = 
-    case texture.format
-    of R32Float:
-      1
-    of Rg32Float:
-      2
-    of Rgb32Float:
-      3
-    of Rgba32Float:
-      4
-    else:
-      raiseAssert "Unsupported color format for float32 data"
+  when F notin {R32Float, Rg32Float, Rgb32Float, Rgba32Float}:
+    {.error: "Unsupported color format for float32 data".}
 
-  doAssert data.len == texture.width * texture.height * components,
+  doAssert data.len == texture.width * texture.height * F.components,
     "Texture data size does not match texture dimensions"
 
   if data.len > 0:
-     texture.update(addr data[0])
+    texture.update(addr data[0])
 
-proc id*[K: static TextureKind](
-  texture: Texture[K],
-): GLuint =
+proc id*[F](texture: Texture[F]): GLuint =
   texture.id
 
-proc width*[K: static TextureKind](
-  texture: Texture[K],
-): int =
+proc width*[F](texture: Texture[F]): int =
   texture.width
 
-proc height*[K: static TextureKind](
-  texture: Texture[K],
-): int =
+proc height*[F](texture: Texture[F]): int =
   texture.height
 
-proc format*(texture: ColorTexture): ColorFormat =
-  texture.format
-
-proc format*(texture: DepthTexture): DepthFormat =
-  texture.format
-
-proc imageFormat(format: ColorFormat): GLenum =
-  case format
-  of Rgba8Linear:
-    GL_RGBA8
-
-  of R32Float:
-    GL_R32F
-
-  of Rg32Float:
-    GL_RG32F
-
-  of Rgba32Float:
-    GL_RGBA32F
-
-  of Rgba8Srgb:
-    raiseAssert "sRGB texture cannot be used as image2D"
-
-  of Rgb32Float:
-    raiseAssert "RGB32F texture cannot be used as image2D"
-
-proc residentSampleHandle*[K: static TextureKind](
-  texture: Texture[K],
+proc residentSampleHandle*[F: static](
+  texture: Texture[F]
 ): GLuint64 =
   doAssert texture != nil
 
@@ -423,10 +421,13 @@ proc residentSampleHandle*[K: static TextureKind](
 
   result = texture.sampleHandle
 
-proc residentImageHandle*(
-  texture: ColorTexture,
+proc residentImageHandle*[F: static ColorFormat](
+  texture: ColorTexture[F]
 ): GLuint64 =
   doAssert texture != nil
+
+  when F notin {Rgba8Linear, R32Float, Rg32Float, Rgba32Float}:
+    {.error: "Unsupported format for image2D".}
 
   if texture.imageHandle == 0:
     texture.imageHandle = glGetImageHandleARB(
@@ -434,7 +435,7 @@ proc residentImageHandle*(
       0,                   # mip level
       false,               # not layered
       0,                   # layer
-      texture.format.imageFormat,
+      F.GLenum,
     )
 
     doAssert texture.imageHandle != 0,

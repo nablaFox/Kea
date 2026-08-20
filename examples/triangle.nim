@@ -10,23 +10,24 @@ let kea = init(
   title = "triangle"
 )
 
-let renderer = kea.newRenderer(
-  material = tuple[color: Color],
-  globals = (),
-  vert = """ 
-    void main() {
-      gl_Position = vec4(position, 1.0);
-    }
-  """,
-  frag = """
-    out vec4 FragColor;
+let renderer =kea.newRenderer(
+  vert = proc(
+    vertex: Vertex,
+    _: Mat4, _: Mat3,
+    material: tuple[color: Color], 
+    globals: tuple[],
+    position: var Vec4,
+    output: var tuple[]
+  ) =
+    position = vertex.position.hom,
 
-    uniform vec3 color;
-
-    void main() {
-      FragColor = vec4(color, 1.0);
-    }
-  """
+  frag = proc(
+    material: tuple[color: Color], 
+    globals: tuple[],
+    input: tuple[],
+    atts: var tuple[color: Vec4]
+  ) =
+    atts.color = material.color.hom
 )
 
 let triangle = renderer.add(

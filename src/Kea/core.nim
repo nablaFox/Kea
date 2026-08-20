@@ -9,6 +9,7 @@ import
   target,
   primitives,
   transform,
+  shader,
   nimgl/glfw
 
 const
@@ -23,7 +24,7 @@ type
     keyboard*: Keyboard
     mouse*: Mouse
     aspect*: float32
-    backbuffer*: RenderTarget[BackBuffer]
+    backbuffer*: BackBufferTarget
     width*: int32
     height*: int32
     present*: proc() {.closure.}
@@ -81,18 +82,38 @@ proc newMesh*(
 ): Mesh =
   mesh.new(kea.storage, vertices, indices)
 
-proc newRenderer*[G, M](
+template newRenderer*[
+  G: tuple; 
+  M: tuple; 
+  T: tuple;
+  O: tuple;
+](
   kea: Kea,
-  material: typedesc[M],
-  vert: string,
-  frag: string,
-  globals: G = G.default
-): Renderer[G, M] =
-  renderer.new[G, M](
-    kea.storage, 
-    vert = vert, 
-    frag = frag, 
-    globals = globals
+  vert: VertShader[G, M, T],
+  frag: FragShader[G, M, T, O],
+  globals: G
+): Renderer[G, M, O] =
+  renderer.new[G, M, T, O](
+    kea.storage,
+    vert,
+    frag,
+    globals
+  )
+
+template newRenderer*[
+  G: tuple; 
+  M: tuple; 
+  T: tuple;
+  O: tuple;
+](
+  kea: Kea,
+  vert: VertShader[G, M, T],
+  frag: FragShader[G, M, T, O]
+): Renderer[G, M, O] =
+  renderer.new[G, M, T, O](
+    kea.storage,
+    vert,
+    frag
   )
 
 proc add*(

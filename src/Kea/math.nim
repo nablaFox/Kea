@@ -104,6 +104,15 @@ proc rotate*(axis: Vec3, theta: float32, phi: float32): Vec3 =
 
   axis * cos(theta) + r * sin(theta)
 
+proc face*(normal, view: Vec3): Vec3 =
+  if dot(normal, view) < 0.0: -normal else: normal 
+
+proc hom*(v: Vec3, w: float32 = 1.0): Vec4 =
+  [v.x, v.y, v.z, w]
+
+proc xyz*(v: Vec4): Vec3 =
+  [v.x, v.y, v.z]
+
 proc `*`*[R, N, C: static int](
   a: Matrix[R, N],
   b: Matrix[N, C]
@@ -219,3 +228,7 @@ proc roll*(value: float32): Mat3 =
 
 proc lerp*(a, b: float32, t: float32): float32 =
   a + (b - a) * t
+
+proc smoothstep*(a, b, x: float32): float32 =
+  let t = ((x - a) / (b - a)).clamp(0.0, 1.0)
+  t * t * (3.0 - 2.0 * t)

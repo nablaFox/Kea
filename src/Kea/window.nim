@@ -10,7 +10,7 @@ type
     mouse*: Mouse
     keyboard*: Keyboard
 
-    backbuffer*: RenderTarget[BackBuffer]
+    backbuffer*: BackBufferTarget
 
     cursorMode*: CursorMode
 

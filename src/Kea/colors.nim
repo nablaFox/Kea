@@ -16,3 +16,9 @@ template g*(v: Color): untyped =
 
 template b*(v: Color): untyped =
   v[2]
+
+proc mix*(a, b: Color, t: float32): Color = 
+  discard
+
+proc sRGB*(color: Color): Color =
+  discard
