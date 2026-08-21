@@ -114,18 +114,18 @@ template new*[G, M, T, A](
 
 
 template compatible(Output, Attachment: typedesc): bool =
-  when Attachment is ColorTexture[R32Float]:
+  when Attachment is Texture[R32Float]:
     Output is float32
 
-  elif Attachment is ColorTexture[Rg32Float]:
+  elif Attachment is Texture[Rg32Float]:
     Output is Vec2
 
-  elif Attachment is ColorTexture[Rgb32Float]:
+  elif Attachment is Texture[Rgb32Float]:
     Output is Vec3
 
-  elif Attachment is ColorTexture[Rgba8Linear] or
-       Attachment is ColorTexture[Rgba8Srgb] or
-       Attachment is ColorTexture[Rgba32Float]:
+  elif Attachment is Texture[Rgba8Linear] or
+       Attachment is Texture[Rgba8Srgb] or
+       Attachment is Texture[Rgba32Float]:
     Output is Vec4
 
   else:
@@ -134,11 +134,10 @@ template compatible(Output, Attachment: typedesc): bool =
 proc render*[
   G, M, A: tuple;
   Atts: tuple;
-  K: static RenderTargetKind; 
-  D: static DepthFormat;
+  K: static RenderTargetKind;
 ](
   renderer: Renderer[G, M, A], 
-  target: RenderTarget[K, Atts, D], 
+  target: RenderTarget[K, Atts], 
   cullMode: CullMode = CullBack,
   depthTest: DepthTest = DepthLess,
   depthWrite: bool = true,

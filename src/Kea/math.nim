@@ -4,6 +4,7 @@ type
   Vec*[C: static int] = array[C, float32]
   Matrix*[R, C: static int] = array[R, Vec[C]]
 
+  Vec1* = Vec[1]
   Vec2* = Vec[2]
   Vec3* = Vec[3]
   Vec4* = Vec[4]
@@ -11,16 +12,28 @@ type
   Mat3* = Matrix[3, 3]
   Mat4* = Matrix[4, 4]
 
-template x*(v: Vec2 | Vec3 | Vec4): untyped =
+template x*(v: Vec1 | Vec2 | Vec3 | Vec4): untyped =
+  v[0]
+
+template r*(v: Vec1 | Vec2 | Vec3 | Vec4): untyped =
   v[0]
 
 template y*(v: Vec2 | Vec3 | Vec4): untyped =
   v[1]
 
+template g*(v: Vec2 | Vec3 | Vec4): untyped =
+  v[1]
+
 template z*(v: Vec3 | Vec4): untyped =
   v[2]
 
+template b*(v: Vec3 | Vec4): untyped =
+  v[2]
+
 template w*(v: Vec4): untyped =
+  v[3]
+
+template a*(v: Vec4): untyped =
   v[3]
 
 proc vec*[C: static int](value: float32): Vec[C] =

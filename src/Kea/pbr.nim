@@ -27,8 +27,8 @@ type
     proj: Mat4,
     eye: Vec3,
     light: RectLight,
-    ltcInverseMatrixLut: ColorTexture[Rgba32Float],
-    ltcMagnitudeFresnelLut: ColorTexture[Rg32Float],
+    ltcInverseMatrixLut: Texture[Rgba32Float],
+    ltcMagnitudeFresnelLut: Texture[Rg32Float],
   ]
 
   PBRRenderer* = Renderer[
@@ -56,8 +56,8 @@ proc radiance*(
   albedo: Vec3,
   roughness: float32,
   metallic: float32,
-  ltcInverseMatrixLut: ColorTexture[Rgba32Float],
-  ltcMagnitudeFresnelLut: ColorTexture[Rg32Float],
+  ltcInverseMatrixLut: Texture[Rgba32Float],
+  ltcMagnitudeFresnelLut: Texture[Rg32Float],
 ): Color = discard
 
 proc vert*(

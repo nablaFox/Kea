@@ -1,8 +1,8 @@
 import Kea, std/[random, sequtils]
 
 type McmlMaterial = tuple[
-  transmittance: ColorTexture,
-  diffuse: ColorTexture,
+  transmittance: Texture[R32Float],
+  diffuse: Texture[R32Float],
   photons: uint32,
   size: float32
 ]
@@ -19,7 +19,8 @@ type Mcml = object
 
   renderer: Renderer[
     tuple[view: Mat4, proj: Mat4], 
-    McmlMaterial
+    McmlMaterial,
+    tuple[color: Vec4]
   ]
 
   slab: RenderItem[McmlMaterial]
@@ -35,94 +36,74 @@ proc add(
   anisotropy: float32
 ): Mcml =
   let renderer = kea.newRenderer(
-    material = McmlMaterial,
     globals = (
       view: Identity4,
       proj: Identity4
     ),
-    vert = """
-      uniform mat4 view;
-      uniform mat4 proj;
 
-      out vec3 ObjectNormal;
-      out vec3 WorldNormal;
-      out vec2 UV;
+    vert = proc(
+      vertex: Vertex,
+      model: Mat4,
+      nmat: Mat3,
+      material: McmlMaterial,
+      g: tuple[view: Mat4, proj: Mat4],
+      position: var Vec4,
+      output: var tuple[
+        objectNormal: Vec3,
+        worldNormal: Vec3,
+        uv: Vec2
+      ]
+    ) =
+      position = g.proj * g.view * model * vertex.position.hom
+      output.objectNormal = vertex.normal
+      output.worldNormal = (nmat * vertex.normal).normalize
+      output.uv = vertex.uv,
 
-      void main() {
-        gl_Position =
-          proj * view * model * vec4(position, 1.0);
+    frag = proc(
+      material: McmlMaterial,
+      globals: tuple[view: Mat4, proj: Mat4],
+      input: tuple[
+        objectNormal: Vec3,
+        worldNormal: Vec3,
+        uv: Vec2
+      ],
+      atts: var tuple[color: Vec4]
+    ) =
+      proc density(texture: Texture[R32Float], uv: Vec2): float32 =
+        let res = texture.size
 
-        ObjectNormal = normal;
-        WorldNormal = normalize(nmat * normal);
-        UV = uv;
-      }
-    """,
-    frag = """
-      in vec3 ObjectNormal;
-      in vec3 WorldNormal;
-      in vec2 UV;
+        let texelArea =
+          (material.size / res.x.float32) *
+          (material.size / res.y.float32)
 
-      out vec4 FragColor;
+        texture.sample(uv).r / (material.photons.float32 * texelArea)
 
-      layout(bindless_sampler)
-      uniform sampler2D transmittance;
+      let color =
+        if input.objectNormal.x > 0.99:
+          let color = [0.20'f, 0.65, 0.95]
 
-      layout(bindless_sampler)
-      uniform sampler2D diffuse;
+          let density = material.transmittance.density(input.uv)
 
-      uniform uint photons;
-      uniform float size;
+          tonemap.exponential(color * density)
 
-      float tonemap(float x) {
-        const float exposure = 1.0;
-        return 1.0 - exp(-x * exposure);
-      }
+        elif input.objectNormal.x < -0.99:
+          let color = [0.95'f, 0.65, 0.20] 
 
-      float powerDensity(sampler2D tex, vec2 uv) {
-        ivec2 res = textureSize(tex, 0);
+          let density = material.diffuse.density(input.uv)
 
-        float texelArea = 
-          (size / float(res.x)) *
-          (size / float(res.y));
+          tonemap.exponential(color * density)
 
-        return texture(tex, uv).r / (float(photons) * texelArea);
-      }
+        else:
+          let N = input.worldNormal.normalize
+          let L = [0.4'f, 0.8, 0.6].normalize
 
-      void main() {
-        vec3 color;
+          let ndotl = max(dot(N, L), 0.0)
+          let lighting = 0.35 + 0.65 * ndotl
 
-        if (ObjectNormal.x > 0.99) {
-          float T = powerDensity(transmittance, UV);
+          [0.28'f, 0.42, 0.48] * lighting
 
-          vec3 transmissionColor = vec3(0.20, 0.65, 0.95);
-
-          color = transmissionColor * tonemap(T);
-        } else if (ObjectNormal.x < -0.99) {
-          float D = powerDensity(diffuse, UV);
-
-          vec3 diffuseColor = vec3(0.35, 0.55, 1.0);
-
-          color = diffuseColor * tonemap(D);
-        } else {
-          vec3 N = normalize(WorldNormal);
-          vec3 L = normalize(vec3(0.4, 0.8, 0.6));
-
-          float ndotl = max(dot(N, L), 0.0);
-
-          float lighting = 0.35 + 0.65 * ndotl;
-
-          vec3 slabColor = vec3(0.28, 0.42, 0.48);
-
-          color = slabColor * lighting;
-        }
-
-        FragColor = vec4(
-          pow(max(color, vec3(0.0)), vec3(1.0 / 2.2)),
-          1.0
-        );
-      }
-    """
-  )
+      atts.color = color.sRGB.hom
+    )
 
   let slab = renderer.add(
     Cube,

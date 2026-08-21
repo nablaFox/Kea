@@ -141,9 +141,9 @@ proc set*(uniform: Uniform, value: Mat3) =
   checkType(uniform, value)
   glUniformMatrix3fv(uniform.location, 1, true, addr value[0][0]) 
 
-proc setTexture[F: static ColorFormat](
+proc setTexture[F: static TextureFormat](
   uniform: Uniform,
-  texture: ColorTexture[F]
+  texture: Texture[F]
 ) =
   if uniform.location < 0:
     return
@@ -171,43 +171,14 @@ proc setTexture[F: static ColorFormat](
         texture.residentImageHandle
       )
     else:
-      {.error: "Texture format cannot be used as image2D"}
+      raiseAssert "Texture format cannot be used as image2D"
 
   else:
     raiseAssert "Unsupported uniform type for texture: " & $uniform.glType.uint32
 
-proc setTexture[F: static DepthFormat](
+proc set*[F: static TextureFormat](
   uniform: Uniform,
-  texture: DepthTexture[F]
-) =
-  if uniform.location < 0:
-    return
-
-  when not defined(release) and not defined(danger):
-    doAssert uniform.glType == GL_SAMPLER_2D
-
-  case uniform.glType
-  of GL_SAMPLER_2D:
-    glUniformHandleui64ARB(
-      uniform.location,
-      texture.residentSampleHandle
-    )
-
-  of GL_IMAGE_2D:
-    raiseAssert "Depth texture cannot be used as image2D"
-
-  else:
-    raiseAssert "Unsupported uniform type for texture: " & $uniform.glType.uint32
-
-proc set*[F: static ColorFormat](
-  uniform: Uniform,
-  texture: ColorTexture[F]
-) =
-  uniform.setTexture(texture)
-
-proc set*[F: static DepthFormat](
-  uniform: Uniform,
-  texture: DepthTexture[F]
+  texture: Texture[F]
 ) =
   uniform.setTexture(texture)
 

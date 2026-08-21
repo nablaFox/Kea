@@ -12,7 +12,8 @@ import
     input,
     colors,
     orbit,
-    texture
+    texture,
+    tonemap
   ], 
   std/math as stdmath
 
@@ -30,4 +31,5 @@ export
   input,
   colors,
   orbit,
-  texture
+  texture,
+  tonemap

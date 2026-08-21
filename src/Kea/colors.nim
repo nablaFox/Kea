@@ -8,15 +8,6 @@ const Blue*: Color  = [0.0, 0.0, 1.0]
 const White*: Color = [1.0, 1.0, 1.0]
 const Black*: Color = [0.0, 0.0, 0.0]
 
-template r*(v: Color): untyped =
-  v[0]
-
-template g*(v: Color): untyped =
-  v[1]
-
-template b*(v: Color): untyped =
-  v[2]
-
 proc mix*(a, b: Color, t: float32): Color = 
   discard
 

@@ -1,18 +1,6 @@
 import nimgl/opengl
 
 type
-  ColorFormat* = enum
-    Rgba8Linear
-    Rgba8Srgb
-    R32Float
-    Rg32Float
-    Rgb32Float
-    Rgba32Float
-
-  DepthFormat* = enum
-    Depth24
-    Depth32Float
-
   TextureOptions* = object
     minFilter*: GLenum
     magFilter*: GLenum
@@ -25,23 +13,27 @@ type
     sourceType: GLenum,
   ]
 
-  TextureFormat = ColorFormat | DepthFormat
+  TextureFormat* = enum
+    Rgba8Linear
+    Rgba8Srgb
+    R32Float
+    Rg32Float
+    Rgb32Float
+    Rgba32Float
+    Depth24
+    Depth32Float 
 
-  TextureObj[F: static; FT = typeof(F)] = object
+  TextureObj[F: static TextureFormat] = object
     id: GLuint
     width: int
     height: int
     sampleHandle: GLuint64
-    imageHandle: GLuint64
 
-  Texture*[F: static] =
+    when F in {Rgba8Linear, R32Float, Rg32Float, Rgba32Float}:
+      imageHandle: GLuint64
+
+  Texture*[F: static TextureFormat] =
     ref TextureObj[F]
-
-  ColorTexture*[F: static ColorFormat] =
-    Texture[F]
-
-  DepthTexture*[F: static DepthFormat] =
-    Texture[F]
 
 const
   DataTextureOptions* = TextureOptions(
@@ -58,23 +50,22 @@ const
     wrapT: GL_CLAMP_TO_EDGE,
   )
 
-proc `=destroy`[F: static; FT](
-  texture: var TextureObj[F, FT]
-) =
+proc `=destroy`[F: static TextureFormat](texture: var TextureObj[F]) =
   {.cast(raises: []).}:
     if texture.sampleHandle != 0:
       glMakeTextureHandleNonResidentARB(texture.sampleHandle)
       texture.sampleHandle = 0
 
-    if texture.imageHandle != 0:
-      glMakeImageHandleNonResidentARB(texture.imageHandle)
-      texture.imageHandle = 0
+    when F in {Rgba8Linear, R32Float, Rg32Float, Rgba32Float}:
+      if texture.imageHandle != 0:
+        glMakeImageHandleNonResidentARB(texture.imageHandle)
+        texture.imageHandle = 0
 
     if texture.id != 0:
       glDeleteTextures(1, addr texture.id)
       texture.id = 0
 
-proc GLenum(format: ColorFormat): GLenum =
+proc GLenum(format: TextureFormat): GLenum =
   case format
   of Rgba8Linear:
     GL_RGBA8
@@ -94,15 +85,13 @@ proc GLenum(format: ColorFormat): GLenum =
   of Rgba32Float:
     GL_RGBA32F
 
-proc GLenum(format: DepthFormat): GLenum =
-  case format
   of Depth24:
     GL_DEPTH_COMPONENT24
 
   of Depth32Float:
     GL_DEPTH_COMPONENT32F
 
-proc components(format: ColorFormat): int =
+proc components(format: TextureFormat): int =
   case format
   of Rgba8Linear, Rgba8Srgb, Rgba32Float:
     4
@@ -112,8 +101,10 @@ proc components(format: ColorFormat): int =
     2
   of Rgb32Float:
     3
+  of Depth24, Depth32Float:
+    1
 
-proc info(format: ColorFormat): TextureInfo =
+proc info(format: TextureFormat): TextureInfo =
   case format
   of Rgba8Linear:
     result = (
@@ -157,8 +148,6 @@ proc info(format: ColorFormat): TextureInfo =
       sourceType: EGL_FLOAT,
     )
 
-proc info(format: DepthFormat): TextureInfo =
-  case format
   of Depth24:
     result = (
       internalFormat: GL_DEPTH_COMPONENT24.GLint,
@@ -173,7 +162,7 @@ proc info(format: DepthFormat): TextureInfo =
       sourceType: EGL_FLOAT,
     )
 
-proc createTexture[F: static](
+proc createTexture[F: static TextureFormat](
   data: pointer,
   width, height: Natural,
   info: TextureInfo,
@@ -182,7 +171,7 @@ proc createTexture[F: static](
   doAssert width > 0
   doAssert height > 0
 
-  new(result)
+  system.new(result)
 
   result.width = width.int
   result.height = height.int
@@ -242,27 +231,13 @@ proc createTexture[F: static](
     previousTexture.GLuint,
   )
 
-proc new*(
+template new*(
   data: pointer,
   width, height: Natural,
-  format: static ColorFormat,
+  format: static TextureFormat,
   options: TextureOptions,
-): ColorTexture[format] =
-  result = createTexture[format](
-    data,
-    width,
-    height,
-    format.info,
-    options,
-  )
-
-proc new*(
-  data: pointer,
-  width, height: Natural,
-  format: static DepthFormat,
-  options: TextureOptions,
-): DepthTexture[format] =
-  result = createTexture[format](
+): untyped =
+  createTexture[format](
     data,
     width,
     height,
@@ -273,62 +248,33 @@ proc new*(
 proc new*(
   data: string,
   width, height: Natural,
-  format: static ColorFormat,
+  format: static TextureFormat,
   options: TextureOptions,
-): ColorTexture[format] =
+): Texture[format] =
   doAssert data.len > 0
 
-  result = new(
+  result = createTexture[format](
     addr data[0],
     width,
     height,
-    format,
-    options,
+    format.info,
+    options
   )
 
-proc new*(
-  data: string,
+template new*(
   width, height: Natural,
-  format: static DepthFormat,
+  format: untyped,
   options: TextureOptions,
-): DepthTexture[format] =
-  doAssert data.len > 0
-
-  result = new(
-    addr data[0],
-    width,
-    height,
-    format,
-    options,
-  )
-
-proc new*(
-  width, height: Natural,
-  format: static ColorFormat,
-  options: TextureOptions,
-): ColorTexture[format] =
-  result = new(
+): untyped =
+  createTexture[format](
     nil,
     width,
     height,
-    format,
+    format.info,
     options,
   )
 
-proc new*(
-  width, height: Natural,
-  format: static DepthFormat,
-  options: TextureOptions,
-): DepthTexture[format] =
-  result = new(
-    nil,
-    width,
-    height,
-    format,
-    options,
-  )
-
-proc update*[F](
+proc update*[F: static TextureFormat](
   texture: Texture[F],
   data: pointer,
   x, y: Natural,
@@ -371,7 +317,7 @@ proc update*[F](
     previousTexture.GLuint,
   )
 
-proc update*[F](
+proc update*[F: static TextureFormat](
   texture: Texture[F],
   data: pointer
 ) = 
@@ -383,8 +329,8 @@ proc update*[F](
     texture.height,
   )
 
-proc update*[F: static ColorFormat](
-  texture: ColorTexture[F],
+proc update*[F: static TextureFormat](
+  texture: Texture[F],
   data: openArray[float32]
 ) = 
   when F notin {R32Float, Rg32Float, Rgb32Float, Rgba32Float}:
@@ -405,7 +351,46 @@ proc width*[F](texture: Texture[F]): int =
 proc height*[F](texture: Texture[F]): int =
   texture.height
 
-proc residentSampleHandle*[F: static](
+proc size*[F](texture: Texture[F]): array[2, float32] =
+  [texture.width.float32, texture.height.float32]
+
+proc sample*(
+  texture: Texture[Rgba8Linear],
+  sample: array[2, float32]
+): array[4, float32] =
+  discard
+
+proc sample*(
+  texture: Texture[Rgba8Srgb],
+  sample: array[2, float32]
+): array[4, float32] =
+  discard
+
+proc sample*(
+  texture: Texture[R32Float],
+  sample: array[2, float32]
+): array[1, float32] =
+  discard
+
+proc sample*(
+  texture: Texture[Rg32Float],
+  sample: array[2, float32]
+): array[2, float32] =
+  discard
+
+proc sample*(
+  texture: Texture[Rgb32Float],
+  sample: array[2, float32]
+): array[3, float32] =
+  discard
+
+proc sample*(
+  texture: Texture[Rgba32Float],
+  sample: array[2, float32]
+): array[4, float32] =
+  discard
+
+proc residentSampleHandle*[F: static TextureFormat](
   texture: Texture[F]
 ): GLuint64 =
   doAssert texture != nil
@@ -421,8 +406,8 @@ proc residentSampleHandle*[F: static](
 
   result = texture.sampleHandle
 
-proc residentImageHandle*[F: static ColorFormat](
-  texture: ColorTexture[F]
+proc residentImageHandle*[F: static TextureFormat](
+  texture: Texture[F]
 ): GLuint64 =
   doAssert texture != nil
 
