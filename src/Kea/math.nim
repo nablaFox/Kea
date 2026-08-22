@@ -15,25 +15,13 @@ type
 template x*(v: Vec1 | Vec2 | Vec3 | Vec4): untyped =
   v[0]
 
-template r*(v: Vec1 | Vec2 | Vec3 | Vec4): untyped =
-  v[0]
-
 template y*(v: Vec2 | Vec3 | Vec4): untyped =
-  v[1]
-
-template g*(v: Vec2 | Vec3 | Vec4): untyped =
   v[1]
 
 template z*(v: Vec3 | Vec4): untyped =
   v[2]
 
-template b*(v: Vec3 | Vec4): untyped =
-  v[2]
-
 template w*(v: Vec4): untyped =
-  v[3]
-
-template a*(v: Vec4): untyped =
   v[3]
 
 proc vec*[C: static int](value: float32): Vec[C] =

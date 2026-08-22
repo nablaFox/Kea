@@ -10,24 +10,12 @@ let kea = init(
   title = "triangle"
 )
 
-let renderer =kea.newRenderer(
-  vert = proc(
-    vertex: Vertex,
-    _: Mat4, _: Mat3,
-    material: tuple[color: Color], 
-    globals: tuple[],
-    position: var Vec4,
-    output: var tuple[]
-  ) =
-    position = vertex.position.hom,
+let renderer = kea.renderer(
+  vert = proc(vert: Vertex): tuple[pos: Vec4] = 
+    result.pos = vert.position.hom,
 
-  frag = proc(
-    material: tuple[color: Color], 
-    globals: tuple[],
-    input: tuple[],
-    atts: var tuple[color: Vec4]
-  ) =
-    atts.color = material.color.hom
+  frag = proc(color: Color): tuple[pixel: Vec4] =
+    result.pixel = color.hom  
 )
 
 let triangle = renderer.add(

@@ -75,45 +75,23 @@ proc init*(
     pbr: pbr.new(storage)
   ) 
 
-proc newMesh*(
+proc mesh*(
     kea: Kea,
     vertices: openArray[Vertex],
     indices: openArray[Index],
 ): Mesh =
   mesh.new(kea.storage, vertices, indices)
 
-template newRenderer*[
-  G: tuple; 
-  M: tuple; 
-  T: tuple;
-  O: tuple;
-](
+template renderer*[G: tuple](
   kea: Kea,
-  vert: VertShader[G, M, T],
-  frag: FragShader[G, M, T, O],
-  globals: G
-): Renderer[G, M, O] =
-  renderer.new[G, M, T, O](
+  vert, frag: typed,
+  globals: G = (),
+): untyped =
+  renderer.new(
     kea.storage,
     vert,
     frag,
     globals
-  )
-
-template newRenderer*[
-  G: tuple; 
-  M: tuple; 
-  T: tuple;
-  O: tuple;
-](
-  kea: Kea,
-  vert: VertShader[G, M, T],
-  frag: FragShader[G, M, T, O]
-): Renderer[G, M, O] =
-  renderer.new[G, M, T, O](
-    kea.storage,
-    vert,
-    frag
   )
 
 proc add*(

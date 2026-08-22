@@ -20,25 +20,7 @@ const FragHeader = """
 #extension GL_ARB_bindless_texture : enable
 """
 
-type 
-  VertShader*[G, M, O: tuple] = proc(
-    vertex: Vertex,
-    model: Mat4,
-    nmat: Mat3,
-    material: M,
-    globals: G,
-    position: var Vec4,
-    output: var O
-  )
-
-  FragShader*[G, M, I, A: tuple] = proc(
-    material: M,
-    globals: G,
-    input: I,
-    atts: var A
-  )
-
-proc implementation(shader: NimNode): NimNode {.compileTime.} =
+func implementation(shader: NimNode): NimNode =
   case shader.kind
   of nnkLambda:
     result = shader
@@ -52,10 +34,58 @@ proc implementation(shader: NimNode): NimNode {.compileTime.} =
   else:
     error("expected a named or anonymous procedure", shader)
 
-macro glsl*[G, M, O](shader: VertShader[G, M, O]): string =
-  discard shader.implementation
-  newStrLitNode ""
+func materialType*(
+  vert, frag: NimNode,
+  globals: NimNode
+): NimNode =
+  let
+    vertParams = vert.implementation.params
+    fragParams = frag.implementation.params
+    vertOutput = vertParams[0]
+    globalsType = globals.getTypeImpl
+    VertexType = bindSym"Vertex"
 
-macro glsl*[G, M, I, A](shader: FragShader[G, M, I, A]): string =
-  discard shader.implementation
-  newStrLitNode ""
+  iterator fields(node: NimNode): tuple[name, typ: NimNode] =
+    for field in node:
+      if field.kind == nnkIdentDefs:
+        for i in 0 ..< field.len - 2:
+          yield (field[i], field[^2])
+
+  proc containsField(tupleType, name: NimNode): bool =
+    for fieldName, _ in tupleType.fields:
+      if fieldName.strVal == name.strVal:
+        return true
+
+  proc addMaterials(
+    material: var NimNode,
+    params: NimNode
+  ) =
+    for name, typ in params.fields:
+      if sameType(typ, VertexType):
+        continue
+
+      if name.strVal in ["model", "nmat"]:
+        continue
+
+      if globalsType.containsField(name) or
+         vertOutput.containsField(name) or
+         material.containsField(name):
+        continue
+
+      material.add newIdentDefs(
+        name.strVal.ident,
+        typ.copyNimTree
+      )
+
+  result = newNimNode(nnkTupleTy)
+  result.addMaterials(vertParams)
+  result.addMaterials(fragParams)
+
+func attachmentsType*(frag: NimNode): NimNode =
+  frag.implementation.params[0]
+
+macro vertGlsl*(shader: typed): string =
+  newStrLitNode VertexHeader & ""
+
+macro fragGlsl*(shader: typed): string =
+  newStrLitNode FragHeader & ""

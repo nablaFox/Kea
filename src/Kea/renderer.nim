@@ -7,7 +7,7 @@ import
   primitives, 
   target,
   texture,
-  std/typetraits,
+  std/[typetraits, macros],
   nimgl/opengl
 
 type
@@ -90,28 +90,23 @@ proc newFromSources[G: tuple; M: tuple; A: tuple](
   result.globals = globals
   result.storage = storage
 
-template new*[G, M, T, A](
+macro new*[G: tuple](
   storage: MeshStorage,
-  vert: VertShader[G, M, T],
-  frag: FragShader[G, M, T, A],
-  globals: G
-): Renderer[G, M, A] =
-  newFromSources[G, M, A](
-    storage,
-    vert.glsl,
-    frag.glsl,
-    globals
-  )
+  vert, frag: typed,
+  globals: G = ()
+): untyped =
+  let M = materialType(vert, frag, globals)
+  let A = attachmentsType(frag)
+  let vs = vertGlsl(vert)
+  let fs = fragGlsl(frag)
 
-template new*[G, M, T, A](
-  storage: MeshStorage,
-  vert: VertShader[G, M, T],
-  frag: FragShader[G, M, T, A]
-): Renderer[G, M, A] =
-  block:
-    var globals: G
-    new(storage, vert, frag, globals)
-
+  result = quote do:
+    newFromSources[typeof(`globals`), `M`, `A`](
+      `storage`,
+      `vs`,
+      `fs`,
+      `globals`
+    )
 
 template compatible(Output, Attachment: typedesc): bool =
   when Attachment is Texture[R32Float]:

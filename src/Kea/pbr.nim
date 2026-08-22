@@ -34,7 +34,7 @@ type
   PBRRenderer* = Renderer[
     PBRGlobals, 
     PBRMaterial,
-    tuple[color: Vec4]
+    tuple[pixel: Vec4]
   ]
 
 const 
@@ -50,66 +50,47 @@ const
     metallic: 0.0
   )
 
-proc radiance*(
-  light: RectLight,
-  P, N, V: Vec3,
+proc vert*(
+  vert: Vertex,
+  model: Mat4,
+  nmat: Mat3,
+  view, proj: Mat4
+): tuple[
+  pos: Vec4,
+  worldNormal: Vec3,
+  worldPosition: Vec3
+] = 
+  let P = model * vert.position.hom
+
+  result.pos = proj * view * P
+  result.worldPosition = P.xyz
+  result.worldNormal = nmat * vert.normal
+
+proc frag*(
+  worldNormal: Vec3,
+  worldPosition: Vec3,
+
   albedo: Vec3,
   roughness: float32,
   metallic: float32,
+
+  eye: Vec3,
+  light: RectLight,
   ltcInverseMatrixLut: Texture[Rgba32Float],
-  ltcMagnitudeFresnelLut: Texture[Rg32Float],
-): Color = discard
+  ltcMagnitudeFresnelLut: Texture[Rg32Float]
+): tuple[pixel: Vec4] = 
+  let P = worldPosition
 
-proc vert*(
-  vertex: Vertex,
-  model: Mat4,
-  nmat: Mat3,
-  material: PBRMaterial,
-  globals: PBRGlobals,
-  position: var Vec4,
-  output: var tuple[
-    worldNormal: Vec3,
-    worldPosition: Vec3
-  ]
-) = 
-  let P = model * vertex.position.hom
+  let V = (eye - P).normalize
 
-  position = globals.proj * globals.view * P
-  output.worldPosition = P.xyz
-  output.worldNormal = nmat * vertex.normal
+  let N = worldNormal.normalize.face(-V)
 
-proc frag*(
-  material: PBRMaterial,
-  globals: PBRGlobals,
+  let ambient = 0.03 * albedo
 
-  input: tuple[
-    worldNormal: Vec3,
-    worldPosition: Vec3,
-  ],
+  # TODO: compute radiance
+  let radiance = [0.0'f, 0.0, 0.0]
 
-  atts: var tuple[color: Vec4]
-) = 
-  let P = input.worldPosition
-
-  let V = (globals.eye - P).normalize
-
-  let N = input
-    .worldNormal
-    .normalize
-    .face(-V)
-
-  let ambient = 0.03 * material.albedo
-
-  let radiance = globals.light.radiance(
-    P, N, V,
-    material.albedo,
-    material.roughness,
-    material.metallic,
-    globals.ltcInverseMatrixLut,
-    globals.ltcMagnitudeFresnelLut
-  )
-
-  atts.color = (ambient + radiance)
+  result.pixel = (ambient + radiance)
     .reinhard
     .sRGB
     .hom
@@ -133,8 +114,9 @@ proc new*(storage: MeshStorage): PBRRenderer =
 
   result = renderer.new(
     storage,
-    vert,
-    frag, 
+    vert = vert,
+    frag = frag, 
+    globals = PBRGlobals.default,
   )
 
   result.ltcInverseMatrixLut = ltcInverseMatrixLut

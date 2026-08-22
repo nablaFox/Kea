@@ -1,29 +1,30 @@
 import Kea, std/[random, sequtils]
 
-type McmlMaterial = tuple[
-  transmittance: Texture[R32Float],
-  diffuse: Texture[R32Float],
-  photons: uint32,
-  size: float32
-]
-
-type Mcml = object
-  absorption: float32
-  scattering: float32
-  anisotropy: float32
-  depth: float32
-  resolution: Natural
-
-  transmittance: seq[float32]
-  diffuse: seq[float32]
-
-  renderer: Renderer[
-    tuple[view: Mat4, proj: Mat4], 
-    McmlMaterial,
-    tuple[color: Vec4]
+type 
+  McmlMaterial = tuple[
+    transmittance: Texture[R32Float],
+    diffuse: Texture[R32Float],
+    photons: uint32,
+    size: float32
   ]
 
-  slab: RenderItem[McmlMaterial]
+  Mcml = object
+    absorption: float32
+    scattering: float32
+    anisotropy: float32
+    depth: float32
+    resolution: Natural
+
+    transmittance: seq[float32]
+    diffuse: seq[float32]
+
+    renderer: Renderer[
+      tuple[view: Mat4, proj: Mat4], 
+      McmlMaterial,
+      tuple[pixel: Vec4]
+    ]
+
+    slab: RenderItem[McmlMaterial]
 
 proc add(
   kea: Kea,
@@ -35,66 +36,61 @@ proc add(
   scattering: float32,
   anisotropy: float32
 ): Mcml =
-  let renderer = kea.newRenderer(
+  let renderer = kea.renderer(
     globals = (
       view: Identity4,
       proj: Identity4
     ),
 
     vert = proc(
-      vertex: Vertex,
-      model: Mat4,
-      nmat: Mat3,
-      material: McmlMaterial,
-      g: tuple[view: Mat4, proj: Mat4],
-      position: var Vec4,
-      output: var tuple[
-        objectNormal: Vec3,
-        worldNormal: Vec3,
-        uv: Vec2
-      ]
-    ) =
-      position = g.proj * g.view * model * vertex.position.hom
-      output.objectNormal = vertex.normal
-      output.worldNormal = (nmat * vertex.normal).normalize
-      output.uv = vertex.uv,
+      vert: Vertex,
+      model: Mat4, nmat: Mat3,
+      view, proj: Mat4
+    ): tuple[
+      pos: Vec4,
+      objectNormal: Vec3,
+      worldNormal: Vec3,
+      uv: Vec2
+    ] =
+      result.pos = proj * view * model * vert.position.hom
+      result.objectNormal = vert.normal
+      result.worldNormal = (nmat * vert.normal).normalize
+      result.uv = vert.uv,
 
     frag = proc(
-      material: McmlMaterial,
-      globals: tuple[view: Mat4, proj: Mat4],
-      input: tuple[
-        objectNormal: Vec3,
-        worldNormal: Vec3,
-        uv: Vec2
-      ],
-      atts: var tuple[color: Vec4]
-    ) =
+      objectNormal: Vec3,
+      worldNormal: Vec3,
+      uv: Vec2,
+
+      transmittance: Texture[R32Float],
+      diffuse: Texture[R32Float],
+      photons: uint32,
+      size: float32,
+    ): tuple[pixel: Vec4] =
       proc density(texture: Texture[R32Float], uv: Vec2): float32 =
         let res = texture.size
 
-        let texelArea =
-          (material.size / res.x.float32) *
-          (material.size / res.y.float32)
+        let texelArea = (size / res.x.float32) * (size / res.y.float32)
 
-        texture.sample(uv).r / (material.photons.float32 * texelArea)
+        texture.sample(uv).r / (photons.float32 * texelArea)
 
       let color =
-        if input.objectNormal.x > 0.99:
+        if objectNormal.x > 0.99:
           let color = [0.20'f, 0.65, 0.95]
 
-          let density = material.transmittance.density(input.uv)
+          let density = transmittance.density(uv)
 
           tonemap.exponential(color * density)
 
-        elif input.objectNormal.x < -0.99:
+        elif objectNormal.x < -0.99:
           let color = [0.95'f, 0.65, 0.20] 
 
-          let density = material.diffuse.density(input.uv)
+          let density = diffuse.density(uv)
 
           tonemap.exponential(color * density)
 
         else:
-          let N = input.worldNormal.normalize
+          let N = worldNormal.normalize
           let L = [0.4'f, 0.8, 0.6].normalize
 
           let ndotl = max(dot(N, L), 0.0)
@@ -102,7 +98,7 @@ proc add(
 
           [0.28'f, 0.42, 0.48] * lighting
 
-      atts.color = color.sRGB.hom
+      result.pixel = color.sRGB.hom
     )
 
   let slab = renderer.add(
@@ -126,6 +122,10 @@ proc add(
     transform
   )
 
+  let transmittance = newSeq[float32](resolution * resolution)
+
+  let diffuse = newSeq[float32](resolution * resolution)
+
   Mcml(
     absorption: absorption,
     scattering: scattering,
@@ -133,8 +133,8 @@ proc add(
     depth: depth,
     resolution: resolution,
 
-    transmittance: newSeq[float32](resolution * resolution),
-    diffuse: newSeq[float32](resolution * resolution),
+    transmittance: transmittance,
+    diffuse: diffuse,
 
     renderer: renderer,
     slab: slab

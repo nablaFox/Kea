@@ -1,5 +1,11 @@
 import std/os, std/strformat, std/math, Kea/[math, ltc], brdf
 
+const
+  ProjectRoot = currentSourcePath().parentDir.parentDir
+  OutputDir = ProjectRoot / "src" / "Kea" / "data" / "ltc"
+  N = ltc.LutSize
+  Total = N * N
+
 type 
   GgxBrdf = object
     alpha: float32
@@ -15,10 +21,10 @@ proc sample(ggx: GgxBrdf, wo: Vec3, u: Vec2): Vec3 =
 
   return wi
 
-proc eval(
-  ggx: GgxBrdf,
-  wi, wo: Vec3
-): tuple[value: float32, pdf: float32] =
+proc eval(ggx: GgxBrdf, wi, wo: Vec3): tuple[
+  value: float32, 
+  pdf: float32
+] =
   if wo.z <= 0.0'f:
     return
 
@@ -56,12 +62,6 @@ proc eval(
   let G = 1.0'f / (1.0'f + lambda(wo.z) + lambda(wi.z))
 
   result.value = D * G / (4.0'f * wo.z)
-
-const
-  ProjectRoot = currentSourcePath().parentDir.parentDir
-  OutputDir = ProjectRoot / "src" / "Kea" / "data" / "ltc"
-  N = ltc.LutSize
-  Total = N * N
 
 createDir(OutputDir)
 
