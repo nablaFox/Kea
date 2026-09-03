@@ -1,154 +1,49 @@
 import Kea, std/[random, sequtils]
 
 type 
-  McmlMaterial = tuple[
-    transmittance: Texture[R32Float],
-    diffuse: Texture[R32Float],
-    photons: uint32,
-    size: float32
-  ]
-
   Mcml = object
+    resolution: Natural
     absorption: float32
     scattering: float32
     anisotropy: float32
     depth: float32
-    resolution: Natural
-
+    size: float32
+    photons: uint32
     transmittance: seq[float32]
     diffuse: seq[float32]
+    transmittanceTex: Texture[R32Float]
+    diffuseTex: Texture[R32Float]
 
-    renderer: Renderer[
-      tuple[view: Mat4, proj: Mat4], 
-      McmlMaterial,
-      tuple[pixel: Vec4]
-    ]
-
-    slab: RenderItem[McmlMaterial]
-
-proc add(
-  kea: Kea,
+proc new(
   resolution: Natural,
-  transform: Transform,
   depth: float32,
   size: float32,
   absorption: float32,
   scattering: float32,
   anisotropy: float32
 ): Mcml =
-  let renderer = kea.renderer(
-    globals = (
-      view: Identity4,
-      proj: Identity4
-    ),
-
-    vert = proc(
-      vert: Vertex,
-      model: Mat4, nmat: Mat3,
-      view, proj: Mat4
-    ): tuple[
-      pos: Vec4,
-      objectNormal: Vec3,
-      worldNormal: Vec3,
-      uv: Vec2
-    ] =
-      result.pos = proj * view * model * vert.position.hom
-      result.objectNormal = vert.normal
-      result.worldNormal = (nmat * vert.normal).normalize
-      result.uv = vert.uv,
-
-    frag = proc(
-      objectNormal: Vec3,
-      worldNormal: Vec3,
-      uv: Vec2,
-
-      transmittance: Texture[R32Float],
-      diffuse: Texture[R32Float],
-      photons: uint32,
-      size: float32,
-    ): tuple[pixel: Vec4] =
-      proc density(texture: Texture[R32Float], uv: Vec2): float32 =
-        let res = texture.size
-
-        let texelArea = (size / res.x.float32) * (size / res.y.float32)
-
-        texture.sample(uv).r / (photons.float32 * texelArea)
-
-      let color =
-        if objectNormal.x > 0.99:
-          let color = [0.20'f, 0.65, 0.95]
-
-          let density = transmittance.density(uv)
-
-          tonemap.exponential(color * density)
-
-        elif objectNormal.x < -0.99:
-          let color = [0.95'f, 0.65, 0.20] 
-
-          let density = diffuse.density(uv)
-
-          tonemap.exponential(color * density)
-
-        else:
-          let N = worldNormal.normalize
-          let L = [0.4'f, 0.8, 0.6].normalize
-
-          let ndotl = max(dot(N, L), 0.0)
-          let lighting = 0.35 + 0.65 * ndotl
-
-          [0.28'f, 0.42, 0.48] * lighting
-
-      result.pixel = color.sRGB.hom
-    )
-
-  let slab = renderer.add(
-    Cube,
-    (
-      transmittance: texture.new(
-        width = resolution, 
-        height = resolution, 
-        format = R32Float,
-        DataTextureOptions
-      ),
-      diffuse: texture.new(
-        width = resolution, 
-        height = resolution, 
-        format = R32Float,
-        DataTextureOptions
-      ),
-      photons: 0'u32,
-      size: size
-    ),
-    transform
-  )
-
-  let transmittance = newSeq[float32](resolution * resolution)
-
-  let diffuse = newSeq[float32](resolution * resolution)
-
   Mcml(
     absorption: absorption,
     scattering: scattering,
     anisotropy: anisotropy,
     depth: depth,
     resolution: resolution,
-
-    transmittance: transmittance,
-    diffuse: diffuse,
-
-    renderer: renderer,
-    slab: slab
+    size: size,
+    transmittance: newSeq[float32](resolution * resolution),
+    diffuse: newSeq[float32](resolution * resolution),
+    transmittanceTex: texture.new(
+      width = resolution, 
+      height = resolution, 
+      format = R32Float,
+      DataTextureOptions
+    ),
+    diffuseTex: texture.new(
+      width = resolution, 
+      height = resolution, 
+      format = R32Float,
+      DataTextureOptions
+    )
   )
-
-proc render(mcml: Mcml, backbuffer: RenderTarget, camera: Camera) = 
-  mcml.renderer.view = camera.view
-  mcml.renderer.proj = camera.proj(backbuffer.aspect)
-
-  mcml.slab.scale = block:
-    let s = mcml.slab.material.size
-    [mcml.depth, s, s]
-
-  mcml.renderer.render(backbuffer)
 
 proc update(mcml: var Mcml, photons: Natural) = 
   let 
@@ -157,55 +52,49 @@ proc update(mcml: var Mcml, photons: Natural) =
     absorption = mcml.absorption
     scattering = mcml.scattering
     anisotropy = mcml.anisotropy
-    size = mcml.slab.material.size
-
-  proc photonRandomWalk(): tuple[
-    weight: float32, 
-    pos: Vec3,
-    dir: Vec3
-  ] =
-    var weight = 1.0'f
-    var pos = [0.0'f, 0.0, 0.0]
-    var dir = [0.0'f, 0.0, 1.0]
-
-    let q = absorption / (absorption + scattering)
-
-    while true:
-      let boundary = 
-        if dir.z > 0: (depth - pos.z) / dir.z
-        elif dir.z < 0: - pos.z / dir.z
-        else: Inf.float32
-
-      # sampled from Exp(scattering) (Beer-Lambert law)
-      let dist = - ln(rand(1.0)) / (absorption + scattering)
-
-      if dist >= boundary:
-        pos += dir * boundary
-        break
-
-      pos += dir * dist
-
-      weight *= (1 - q)
-
-      # sampled from Henyey-Greenstein
-      let cosTheta = 
-        if anisotropy == 0: 2 * rand(1.0) - 1
-        else:
-          let g = anisotropy
-          let r = rand(1.0)
-
-          (1 + g^2 - ((1 - g^2) / (1 - g + 2*g*r))^2) / (2*g)
-
-      let phi = 2 * PI * rand(1.0)
-
-      let theta = arccos cosTheta.clamp(-1.0'f, 1.0'f)
-
-      dir = dir.rotate(theta, phi).normalize
-
-    (weight: weight, pos: pos, dir: dir)
+    size = mcml.size
     
   for i in 0..<photons:
-    let (weight, pos, dir) = photonRandomWalk()
+    let (weight, pos, dir) = block:
+      var weight = 1.0'f
+      var pos = [0.0'f, 0.0, 0.0]
+      var dir = [0.0'f, 0.0, 1.0]
+
+      let q = absorption / (absorption + scattering)
+
+      while true:
+        let boundary = 
+          if dir.z > 0: (depth - pos.z) / dir.z
+          elif dir.z < 0: - pos.z / dir.z
+          else: Inf.float32
+
+        # sampled from Exp(scattering) (Beer-Lambert law)
+        let dist = - ln(rand(1.0)) / (absorption + scattering)
+
+        if dist >= boundary:
+          pos += dir * boundary
+          break
+
+        pos += dir * dist
+
+        weight *= (1 - q)
+
+        # sampled from Henyey-Greenstein
+        let cosTheta = 
+          if anisotropy == 0: 2 * rand(1.0) - 1
+          else:
+            let g = anisotropy
+            let r = rand(1.0)
+
+            (1 + g^2 - ((1 - g^2) / (1 - g + 2*g*r))^2) / (2*g)
+
+        let phi = 2 * PI * rand(1.0)
+
+        let theta = arccos cosTheta.clamp(-1.0'f, 1.0'f)
+
+        dir = dir.rotate(theta, phi).normalize
+
+      (weight: weight, pos: pos, dir: dir) 
 
     # mappping [-size/2, size/2] x [-size/2, size/2] -> [0, N] x [0, N]
     let i = int(N.float32 * (pos.x + size / 2) / size)
@@ -219,10 +108,95 @@ proc update(mcml: var Mcml, photons: Natural) =
     if dir.z < 0: mcml.diffuse[index] += weight
     else: mcml.transmittance[index] += weight
 
-  mcml.slab.material.photons += photons.uint32
+  mcml.photons += photons.uint32
 
-  mcml.slab.material.transmittance.update(mcml.transmittance)
-  mcml.slab.material.diffuse.update(mcml.diffuse)
+  mcml.diffuseTex.update(mcml.diffuse)
+  mcml.transmittanceTex.update(mcml.transmittance)
+
+proc render(
+  kea: Kea,
+  mcml: Mcml, 
+  backbuffer: BackBufferTarget, 
+  camera: Camera
+) = 
+  proc vert(
+    vert: Vertex,
+    model: Mat4, nmat: Mat3,
+    view, proj: Mat4
+  ): tuple[
+    pos: Vec4,
+    objectNormal: Vec3,
+    worldNormal: Vec3,
+    uv: Vec2
+  ] =
+    result.pos = proj * view * model * vert.position.hom
+    result.objectNormal = vert.normal
+    result.worldNormal = (nmat * vert.normal).normalize
+    result.uv = vert.uv
+
+  proc frag(
+    objectNormal: Vec3,
+    worldNormal: Vec3,
+    uv: Vec2,
+
+    transmittance: Texture[R32Float],
+    diffuse: Texture[R32Float],
+    photons: uint32,
+    size: float32,
+  ): tuple[pixel: Vec4] =
+    proc density(texture: Texture[R32Float], uv: Vec2): float32 =
+      let res = texture.size
+
+      let texelArea = (size / res.x.float32) * (size / res.y.float32)
+
+      texture.sample(uv).r / (photons.float32 * texelArea)
+
+    let color =
+      if objectNormal.x > 0.99:
+        let color = [0.20'f, 0.65, 0.95]
+
+        let density = transmittance.density(uv)
+
+        tonemap.exponential(color * density)
+
+      elif objectNormal.x < -0.99:
+        let color = [0.95'f, 0.65, 0.20] 
+
+        let density = diffuse.density(uv)
+
+        tonemap.exponential(color * density)
+
+      else:
+        let N = worldNormal.normalize
+        let L = [0.4'f, 0.8, 0.6].normalize
+
+        let ndotl = max(dot(N, L), 0.0)
+        let lighting = 0.35 + 0.65 * ndotl
+
+        [0.28'f, 0.42, 0.48] * lighting
+
+    result.pixel = color.sRGB.hom
+
+  let slab = kea.renderable(
+    Quad,
+    y = 1,
+    yaw = PI / 2,
+    scale = [mcml.depth, mcml.size, mcml.size]
+  )
+
+  kea.render(
+    vert = vert,
+    frag = frag, 
+    renderable = slab,
+    params = (
+      view: camera.view,
+      proj: camera.proj(backbuffer.aspect),
+      transmittance: mcml.transmittanceTex,
+      diffuse: mcml.diffuseTex,
+      photons: mcml.photons,
+      size: mcml.size
+    )
+  ) 
 
 let kea = init(
   width = 800, 
@@ -231,13 +205,9 @@ let kea = init(
   cursor = Disabled
 )
 
-var mcml = kea.add(
+var mcml = new(
   resolution = 512,
   depth = 0.03'f,
-  transform = transform.new(
-    y = 1,
-    yaw = PI / 2
-  ),
   absorption = 2'f,
   scattering = 3'f,
   anisotropy = 0.75'f,
@@ -250,15 +220,16 @@ var orbit = orbit.new(
   distance = 1.0
 )
 
-randomize()
+random.randomize()
 
 for frame in kea.frames:
-  mcml.update(photons = 10_000)
+  if frame.keyboard.pressed(Escape):
+    break
 
   orbit.update(frame)
 
   frame.backbuffer.clear(color = White * 0.1)
 
-  mcml.render(frame.backbuffer, orbit.camera)
+  kea.render(mcml, frame.backbuffer, orbit.camera)
 
   frame.present()

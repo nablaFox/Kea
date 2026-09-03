@@ -37,12 +37,12 @@ proc new*(
   pitch: float32 = 0.0,
   yaw: float32 = 0.0,
   roll: float32 = 0.0,
-  scale: float32 = 1.0,
+  scale: Vec3 = vec3(1.0),
 ): Transform =
   Transform(
     position: [x, y, z],
     rotation: yaw.yaw * pitch.pitch * roll.roll,
-    scale: [scale, scale, scale],
+    scale: scale,
     cachedMatrix: Identity4,
     dirty: true,
   )

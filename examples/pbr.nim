@@ -3,8 +3,8 @@ import Kea
 let kea = init(
   width = 800, 
   height = 600, 
-  title = "basic",
-  cursor = Disabled
+  cursor = Disabled,
+  title = "pbr"
 )
 
 var orbit = orbit.new(
@@ -14,7 +14,15 @@ var orbit = orbit.new(
   pitch = -PI / 8
 )
 
-discard kea.add(
+let pbr = kea.pbr(
+  position = [0.0'f, 10.0, 0.0],
+  radiance = [10.0'f, 8.0'f, 6.0'f],
+  rotation = (PI/2).pitch,
+  width = 8.0'f,
+  height = 8.0'f
+)
+
+discard pbr.add(
   Quad, 
   (
     albedo: [0.32'f, 0.38, 0.43],
@@ -23,11 +31,11 @@ discard kea.add(
   ),
   x = 0, 
   y = -1.0, 
-  scale = 10, 
+  scale = [10'f, 10, 10], 
   pitch = -PI / 2.0
 )
 
-discard kea.add(
+discard pbr.add(
   Sphere, 
   (
     albedo: [0.8'f, 0.38, 0.43],
@@ -37,21 +45,15 @@ discard kea.add(
   x = 0, 
   y = 0, 
 )
-  
-kea.light.position = [0.0'f, 10.0, 0.0]
-kea.light.radiance = [10.0'f, 8.0'f, 6.0'f]
-kea.light.rotation = (PI/2).pitch
-kea.light.width = 8.0'f
-kea.light.height = 8.0'f
 
 for frame in kea.frames:
   if frame.keyboard.pressed(Escape):
-    break 
+    break
 
   orbit.update(frame)
 
   frame.backbuffer.clear()
 
-  kea.render(frame.backbuffer, orbit.camera)
+  pbr.render(frame.backbuffer, orbit.camera)
 
   frame.present()

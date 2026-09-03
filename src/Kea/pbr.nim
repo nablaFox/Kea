@@ -6,7 +6,10 @@ import
   texture, 
   tonemap, 
   shader, 
-  colors
+  camera,
+  target,
+  colors,
+  core
 
 type 
   RectLight* = object
@@ -95,7 +98,14 @@ proc frag*(
     .sRGB
     .hom
 
-proc new*(storage: MeshStorage): PBRRenderer = 
+proc pbr*(
+  kea: Kea,
+  position: Vec3 = [0.0, 0.0, 0.0],
+  radiance: Vec3 = [1.0, 1.0, 1.0],
+  rotation: Mat3 = Identity3,
+  width: float32 = 1.0,
+  height: float32 = 1.0,
+): PBRRenderer = 
   let ltcInverseMatrixLut = texture.new(
     ltc.InverseMatrixData,
     ltc.LutSize,
@@ -112,13 +122,32 @@ proc new*(storage: MeshStorage): PBRRenderer =
     LinearTextureOptions
   )
 
-  result = renderer.new(
-    storage,
+  result = kea.renderer(
     vert = vert,
     frag = frag, 
-    globals = PBRGlobals.default,
+    globals = (
+      view: Identity4,
+      proj: Identity4,
+      eye: [0.0'f, 0.0, 0.0],
+      light: RectLight(
+        position: position,
+        rotation: rotation,
+        width: width,
+        height: height,
+        radiance: radiance
+      ),
+      ltcInverseMatrixLut: ltcInverseMatrixLut,
+      ltcMagnitudeFresnelLut: ltcMagnitudeFresnelLut
+    )
   )
 
   result.ltcInverseMatrixLut = ltcInverseMatrixLut
 
   result.ltcMagnitudeFresnelLut = ltcMagnitudeFresnelLut
+
+proc render*(pbr: PBRRenderer, target: RenderTarget, camera: Camera) =
+  pbr.eye = camera.positioned
+  pbr.view = camera.view
+  pbr.proj = camera.proj target.aspect
+
+  pbr.render(target)

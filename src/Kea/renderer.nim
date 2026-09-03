@@ -14,10 +14,10 @@ type
   Renderable* = ref object
     mesh*: Mesh
     transform*: Transform
-    topology*: Topology
 
   RenderItem*[M: tuple] = ref object
-    drawable*: Renderable
+    renderable*: Renderable
+    topology*: Topology
     material*: M
 
   RendererObj[
@@ -199,8 +199,8 @@ proc render*[
   renderer.globalUniforms.set(renderer.globals)
 
   for item in renderer.items:
-    let drawable = item.drawable
-    let model = drawable.transform.model
+    let renderable = item.renderable
+    let model = renderable.transform.model
     let nmat = model.normalMatrix
 
     renderer.modelUniform.set(model)
@@ -208,7 +208,7 @@ proc render*[
 
     renderer.materialUniforms.set(item.material)
 
-    drawable.mesh.draw(topology = drawable.topology)
+    renderable.mesh.draw(topology = item.topology)
 
 proc add*[G, M, A](
   renderer: Renderer[G, M, A],
@@ -220,7 +220,7 @@ proc add*[G, M, A](
 proc add*[G, M, A](
   renderer: Renderer[G, M, A],
   mesh: Mesh,
-  material = M.default,
+  material: M = M.default,
   transform = Identity,
   topology = Triangles,
 ): RenderItem[M] =
@@ -229,13 +229,13 @@ proc add*[G, M, A](
 
   let renderable = Renderable(
     mesh: mesh,
-    transform: transform,
-    topology: topology
+    transform: transform
   )
 
   result = RenderItem[M](
-    drawable: renderable,
-    material: material
+    renderable: renderable,
+    material: material,
+    topology: topology
   )
 
   renderer.items.add(result)
@@ -243,14 +243,14 @@ proc add*[G, M, A](
 proc add*[G, M, A](
   renderer: Renderer[G, M, A],
   mesh: Mesh,
-  material = M.default,
+  material: M = M.default,
   x: float32 = 0.0,
   y: float32 = 0.0,
   z: float32 = 0.0,
   yaw: float32 = 0.0,
   pitch: float32 = 0.0,
   roll: float32 = 0.0,
-  scale: float32 = 1.0,
+  scale: Vec3 = vec3(1.0),
   topology = Triangles,
 ): RenderItem[M] =
   renderer.add(
@@ -271,7 +271,7 @@ proc add*[G, M, A](
 proc add*[G, M, A](
     renderer: Renderer[G, M, A],
     primitive: Primitive,
-    material = M.default,
+    material: M = M.default,
     transform = Identity,
     topology = Triangles,
 ): RenderItem[M] =
@@ -285,14 +285,14 @@ proc add*[G, M, A](
 proc add*[G, M, A](
   renderer: Renderer[G, M, A],
   primitive: Primitive,
-  material = M.default,
+  material: M = M.default,
   x: float32 = 0.0,
   y: float32 = 0.0,
   z: float32 = 0.0,
   yaw: float32 = 0.0,
   pitch: float32 = 0.0,
   roll: float32 = 0.0,
-  scale: float32 = 1.0,
+  scale: Vec3 = vec3(1.0),
   topology = Triangles,
 ): RenderItem[M] =
   renderer.add(
@@ -311,28 +311,28 @@ proc add*[G, M, A](
   )
 
 proc transform*(item: RenderItem): var Transform =
-  item.drawable.transform
+  item.renderable.transform
 
 proc position*(item: RenderItem): var Vec3 =
-  item.drawable.transform.position
+  item.renderable.transform.position
 
 proc positioned*(item: RenderItem): Vec3 =
-  let transform = item.drawable.transform
+  let transform = item.renderable.transform
   transform.position
 
 proc scale*(item: RenderItem): var Vec3 =
-  item.drawable.transform.scale
+  item.renderabe.transform.scale
 
 proc scaled*(item: RenderItem): Vec3 =
-  let transform = item.drawable.transform
+  let transform = item.renderable.transform
   transform.scale
 
 proc rotation*(item: RenderItem): var Mat3 =
-  item.drawable.transform.rotation
+  item.renderable.transform.rotation
 
 proc rotated*(item: RenderItem): Mat3 =
-  let transform = item.drawable.transform
+  let transform = item.renderable.transform
   transform.rotation
 
 proc model*(item: RenderItem): Mat4 =
-  item.drawable.transform.matrix
+  item.renderable.transform.matrix

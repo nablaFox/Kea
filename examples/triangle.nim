@@ -21,17 +21,18 @@ let renderer = kea.renderer(
 let triangle = renderer.add(
   Triangle, 
   material = (color: colors.Blue),
-  x = 0, 
-  y = -1.0, 
-  scale = 10, 
-  pitch = -PI / 2.0
+  x = 0
 )
 
 for frame in kea.frames:
   if frame.keyboard.pressed(Escape):
-    break 
+    break
 
-  triangle.material.color = [frame.time.sin, frame.time.cos, 0.5]
+  triangle.material.color = [
+    frame.time.sin, 
+    frame.time.cos, 
+    0.5
+  ]
 
   frame.backbuffer.clear()
 
