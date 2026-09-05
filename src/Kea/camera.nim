@@ -39,19 +39,49 @@ proc new*(
     size: size
   )
 
+proc transform*(camera: var Camera): var Transform =
+  camera.transform
+
+proc position*(camera: var Camera): var Vec3 =
+  camera.transform.position
+
+proc positioned*(camera: Camera): Vec3 =
+  let transform = camera.transform
+  transform.position
+
+proc rotation*(camera: var Camera): var Mat3 =
+  camera.transform.rotation
+
+proc rotated*(camera: Camera): Mat3 =
+  let transform = camera.transform
+  transform.rotation
+
+proc forward*(camera: Camera): Vec3 =
+  camera.transform.rotation * WorldForward
+
+proc right*(camera: Camera): Vec3 =
+  camera.transform.rotation * WorldRight
+
+proc up*(camera: Camera): Vec3 =
+  camera.transform.rotation * WorldUp
+
 proc view*(camera: Camera): Mat4 = 
-  let rotTransposed = camera.transform.rotMatrix.transpose
+  let rotTransposed = camera
+    .transform
+    .rotMatrix
+    .transpose
 
-  let transInverted = transform.new(position = camera.transform.position * -1.0).transMatrix
+  let transInverted = transform.new(
+    position = - camera.positioned
+  )
 
-  rotTransposed * transInverted
+  rotTransposed * transInverted.transMatrix
 
 proc proj*(camera: Camera, aspect: float32): Mat4 =
   let near = camera.near
   let far = camera.far
 
   case camera.kind
-
   of Perspective:
     let fov = camera.fov
     let top = tan(fov * 0.5 * (PI / 180.0)) * near
@@ -84,29 +114,3 @@ proc proj*(camera: Camera, aspect: float32): Mat4 =
       [0.0, 0.0, c,   d],
       [0.0, 0.0, 0.0, 1.0]
     ]
-
-proc transform*(camera: var Camera): var Transform =
-  camera.transform
-
-proc position*(camera: var Camera): var Vec3 =
-  camera.transform.position
-
-proc positioned*(camera: Camera): Vec3 =
-  let transform = camera.transform
-  transform.position
-
-proc rotation*(camera: var Camera): var Mat3 =
-  camera.transform.rotation
-
-proc rotated*(camera: Camera): Mat3 =
-  let transform = camera.transform
-  transform.rotation
-
-proc forward*(camera: Camera): Vec3 =
-  camera.transform.rotation * WorldForward
-
-proc right*(camera: Camera): Vec3 =
-  camera.transform.rotation * WorldRight
-
-proc up*(camera: Camera): Vec3 =
-  camera.transform.rotation * WorldUp

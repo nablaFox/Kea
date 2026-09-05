@@ -1,4 +1,5 @@
-# chat-gpt generated (nelder-mead method)
+# GPT-5.6 Sol generated (nelder-mead method)
+# https://en.wikipedia.org/wiki/Nelder%E2%80%93Mead_method
 
 import Kea/math
 import std/algorithm

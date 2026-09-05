@@ -95,10 +95,11 @@ macro new*[G: tuple](
   vert, frag: typed,
   globals: G = ()
 ): untyped =
-  let M = materialType(vert, frag, globals)
-  let A = attachmentsType(frag)
-  let vs = vertGlsl(vert)
-  let fs = fragGlsl(frag)
+  let 
+    M = materialType(vert, frag, globals)
+    A = attachmentsType(frag)
+    vs = vertGlslImpl(vert)
+    fs = fragGlslImpl(vert, frag)
 
   result = quote do:
     newFromSources[typeof(`globals`), `M`, `A`](

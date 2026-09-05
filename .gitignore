@@ -1,6 +1,9 @@
-/Kea
+# ignore files with no extention:
+*
+!*/
+!*.*
+
 nimble.develop
 nimble.paths
 nimbledeps
-examples/*
-!examples/*.nim
+nimcache
