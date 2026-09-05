@@ -15,11 +15,13 @@ var orbit = orbit.new(
 )
 
 let pbr = kea.pbr(
-  position = [0.0'f, 10.0, 0.0],
-  radiance = [10.0'f, 8.0'f, 6.0'f],
-  rotation = (PI/2).pitch,
-  width = 8.0'f,
-  height = 8.0'f
+  light = RectLight(
+    position: [0.0'f, 10.0, 0.0],
+    radiance: [10.0'f, 8.0'f, 6.0'f],
+    rotation: (PI/2).pitch,
+    width: 8.0'f,
+    height: 8.0'f
+  )
 )
 
 discard pbr.add(
@@ -35,16 +37,7 @@ discard pbr.add(
   pitch = -PI / 2.0
 )
 
-discard pbr.add(
-  Sphere, 
-  (
-    albedo: [0.8'f, 0.38, 0.43],
-    roughness: 0.2'f, 
-    metallic: 0.0'f
-  ),
-  x = 0, 
-  y = 0, 
-)
+discard pbr.add(Sphere)
 
 for frame in kea.frames:
   if frame.keyboard.pressed(Escape):

@@ -17,7 +17,7 @@ const Identity* = Transform(
 )
 
 proc new*(
-  position: Vec3 = vec3(0.0),
+  position: Vec3,
   rotation: Mat3 = Identity3,
   scale: Vec3 = vec3(1.0),
 ): Transform =

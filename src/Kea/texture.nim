@@ -252,6 +252,12 @@ proc new*(
   options: TextureOptions,
 ): Texture[format] =
   doAssert data.len > 0
+  const bytesPerComponent =
+    if format in {Rgba8Linear, Rgba8Srgb}: 1 
+    else: 4
+
+  doAssert data.len == width * height * format.components * bytesPerComponent,
+    "Texture data size does not match texture dimensions"
 
   result = createTexture[format](
     addr data[0],
@@ -260,6 +266,21 @@ proc new*(
     format.info,
     options
   )
+
+proc new*(
+  data: openArray[float32],
+  width, height: Natural,
+  format: static TextureFormat,
+  options: TextureOptions,
+): Texture[format] =
+  when format notin {R32Float, Rg32Float, Rgb32Float, Rgba32Float}:
+    {.error: "Unsupported color format for float32 data".}
+
+  doAssert data.len > 0
+  doAssert data.len == width * height * format.components,
+    "Texture data size does not match texture dimensions"
+
+  createTexture[format](addr data[0], width, height, format.info, options)
 
 template new*(
   width, height: Natural,

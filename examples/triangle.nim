@@ -20,8 +20,7 @@ let renderer = kea.renderer(
 
 let triangle = renderer.add(
   Triangle, 
-  material = (color: colors.Blue),
-  x = 0
+  material = (color: colors.Blue)
 )
 
 for frame in kea.frames:

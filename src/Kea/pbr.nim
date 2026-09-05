@@ -5,7 +5,6 @@ import
   ltc, 
   texture, 
   tonemap, 
-  shader, 
   camera,
   target,
   colors,
@@ -20,9 +19,9 @@ type
     radiance*: Vec3
 
   PBRMaterial* = tuple[
-    albedo: Vec3,
-    roughness: float32,
-    metallic: float32,
+    albedo: Vec3 = [1.0, 1.0, 1.0],
+    roughness: float32 = 0.5,
+    metallic: float32 = 0.0,
   ]
 
   PBRGlobals* = tuple[
@@ -41,13 +40,13 @@ type
   ]
 
 const 
-  Red*: PBRMaterial = (
+  RedMaterial*: PBRMaterial = (
     albedo: [1.0, 0.0, 0.0],
     roughness: 0.5,
     metallic: 0.0
   )
 
-  White*: PBRMaterial = (
+  WhiteMaterial*: PBRMaterial = (
     albedo: [1.0, 1.0, 1.0],
     roughness: 0.5,
     metallic: 0.0
@@ -100,11 +99,7 @@ proc frag*(
 
 proc pbr*(
   kea: Kea,
-  position: Vec3 = [0.0, 0.0, 0.0],
-  radiance: Vec3 = [1.0, 1.0, 1.0],
-  rotation: Mat3 = Identity3,
-  width: float32 = 1.0,
-  height: float32 = 1.0,
+  light: RectLight
 ): PBRRenderer = 
   let ltcInverseMatrixLut = texture.new(
     ltc.InverseMatrixData,
@@ -129,13 +124,7 @@ proc pbr*(
       view: Identity4,
       proj: Identity4,
       eye: [0.0'f, 0.0, 0.0],
-      light: RectLight(
-        position: position,
-        rotation: rotation,
-        width: width,
-        height: height,
-        radiance: radiance
-      ),
+      light: light,
       ltcInverseMatrixLut: ltcInverseMatrixLut,
       ltcMagnitudeFresnelLut: ltcMagnitudeFresnelLut
     )

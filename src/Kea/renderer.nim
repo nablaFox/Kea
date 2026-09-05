@@ -222,7 +222,7 @@ proc add*[G, M, A](
   renderer: Renderer[G, M, A],
   mesh: Mesh,
   material: M = M.default,
-  transform = Identity,
+  transform: Transform,
   topology = Triangles,
 ): RenderItem[M] =
   doAssert mesh != nil, "Cannot add a nil mesh"
@@ -273,7 +273,7 @@ proc add*[G, M, A](
     renderer: Renderer[G, M, A],
     primitive: Primitive,
     material: M = M.default,
-    transform = Identity,
+    transform: Transform,
     topology = Triangles,
 ): RenderItem[M] =
   renderer.add(
@@ -322,7 +322,7 @@ proc positioned*(item: RenderItem): Vec3 =
   transform.position
 
 proc scale*(item: RenderItem): var Vec3 =
-  item.renderabe.transform.scale
+  item.renderable.transform.scale
 
 proc scaled*(item: RenderItem): Vec3 =
   let transform = item.renderable.transform
@@ -336,4 +336,4 @@ proc rotated*(item: RenderItem): Mat3 =
   transform.rotation
 
 proc model*(item: RenderItem): Mat4 =
-  item.renderable.transform.matrix
+  item.renderable.transform.model

@@ -39,17 +39,17 @@ proc new*(
     size: size
   )
 
-proc transform*(camera: var Camera): var Transform =
+proc transform*(camera: Camera): var Transform =
   camera.transform
 
-proc position*(camera: var Camera): var Vec3 =
+proc position*(camera: Camera): var Vec3 =
   camera.transform.position
 
 proc positioned*(camera: Camera): Vec3 =
   let transform = camera.transform
   transform.position
 
-proc rotation*(camera: var Camera): var Mat3 =
+proc rotation*(camera: Camera): var Mat3 =
   camera.transform.rotation
 
 proc rotated*(camera: Camera): Mat3 =

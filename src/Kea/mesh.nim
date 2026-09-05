@@ -195,9 +195,8 @@ proc setVertex*(mesh: Mesh, index: Natural, vertex: Vertex) =
   mesh.vertices[index] = vertex
   upload(mesh)
 
-proc update*(mesh: Mesh, positions: openArray[Vec3]) =
-  # TODO: recompute normals
-  mesh.vertices = @[]
+proc update*(mesh: Mesh, positions: openArray[Vec3])
+  {.error: "not implemented".} = discard
 
 proc glMode(topology: Topology): GLenum =
   case topology

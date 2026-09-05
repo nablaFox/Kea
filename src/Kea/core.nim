@@ -1,6 +1,5 @@
 import 
   renderer,
-  camera,
   mesh,
   orbit,
   input,
@@ -8,9 +7,6 @@ import
   window,
   target,
   primitives,
-  transform,
-  shader,
-  texture,
   nimgl/glfw
 
 const
@@ -99,7 +95,7 @@ proc renderable*(
   pitch: float32 = 0.0,
   roll: float32 = 0.0,
   scale: Vec3 = vec3(1.0)
-): Renderable = discard
+): Renderable {.error: "not implemented;".} = discard
 
 template render*[T: tuple](
   kea: Kea,
@@ -107,7 +103,8 @@ template render*[T: tuple](
   vert, frag: typed,
   params: T = (),
   topology = Triangles  
-) = discard
+) =
+  {.error: "not implemented".}
 
 proc `cursor=`*(kea: Kea, cursor: CursorMode) =
   kea.window.setCursorMode(cursor)
@@ -132,12 +129,13 @@ iterator frames*(kea: Kea): Frame =
     let delta = (currentTime - previousTime).float32
     let time = (currentTime - startTime).float32
     let fps = if delta > 0.0: 1.0 / delta else: 0.0
+
+    kea.window.poll()
+
     let keyboard = kea.window.keyboard
     let mouse = kea.window.mouse
 
     previousTime = currentTime
-
-    kea.window.poll()
 
     yield Frame(
       delta: delta,
