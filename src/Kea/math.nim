@@ -24,6 +24,9 @@ template z*(v: Vec3 | Vec4): untyped =
 template w*(v: Vec4): untyped =
   v[3]
 
+proc invsqrt*(x: float32): float32 =
+  1 / sqrt(x)
+
 proc vec*[C: static int](value: float32): Vec[C] =
   for i in 0..<C:
     result[i] = value
@@ -68,6 +71,30 @@ proc `/=`*[C: static int](v: var Vec[C], scalar: float32) =
   for i in 0..<C:
     v[i] /= scalar
 
+proc `*`*[C: static int](a, b: Vec[C]): Vec[C] =
+  for i in 0 ..< C:
+    result[i] = a[i] * b[i]
+
+proc `/`*[C: static int](a, b: Vec[C]): Vec[C] =
+  for i in 0 ..< C:
+    result[i] = a[i] / b[i]
+
+proc `-`*[C: static int](scalar: float32, v: Vec[C]): Vec[C] =
+  for i in 0 ..< C:
+    result[i] = scalar - v[i]
+
+proc `-`*[C: static int](v: Vec[C], scalar: float32): Vec[C] =
+  for i in 0 ..< C:
+    result[i] = v[i] - scalar
+
+proc `+`*[C: static int](v: Vec[C], scalar: float32): Vec[C] =
+  for i in 0 ..< C:
+    result[i] = v[i] + scalar
+
+proc `+`*[C: static int](scalar: float32, v: Vec[C]): Vec[C] =
+  for i in 0 ..< C:
+    result[i] = v[i] + scalar
+
 proc dot*[C: static int](a: Vec[C], b: Vec[C]): float32 =
   for i in 0..<C:
     result += a[i] * b[i]
@@ -106,13 +133,30 @@ proc rotate*(axis: Vec3, theta: float32, phi: float32): Vec3 =
   axis * cos(theta) + r * sin(theta)
 
 proc face*(normal, view: Vec3): Vec3 =
-  if dot(normal, view) < 0.0: -normal else: normal 
+  if dot(normal, view) > 0.0: normal else: -normal
+
+proc tangentToward*(normal, direction: Vec3): Vec3 =
+  let
+    tangent = direction - normal * dot(direction, normal)
+    lengthSquared = dot(tangent, tangent)
+
+  if lengthSquared > 1e-10'f:
+    return tangent * lengthSquared.invsqrt
+
+  let helper: Vec3 =
+    if normal.z.abs < 0.999'f: [0.0'f, 0.0, 1.0]
+    else: [0.0'f, 1.0, 0.0]
+
+  cross(helper, normal).normalize
 
 proc hom*(v: Vec3, w: float32 = 1.0): Vec4 =
   [v.x, v.y, v.z, w]
 
 proc xyz*(v: Vec4): Vec3 =
   [v.x, v.y, v.z]
+
+proc xy*(v: Vec4 | Vec3): Vec2 =
+  [v.x, v.y]
 
 proc `*`*[R, N, C: static int](
   a: Matrix[R, N],

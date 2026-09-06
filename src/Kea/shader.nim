@@ -1,30 +1,32 @@
-import mesh, texture, math, std/[macros, strutils]
+import 
+  math, 
+  mesh, 
+  texture, 
+  colors,
+  std/[macros, sequtils, strutils, math]
 
-const VertexHeader* = """
-#version 330 core
-#extension GL_ARB_bindless_texture : enable
+const
+  VertexHeader* = """
+    #version 330 core
+    #extension GL_ARB_bindless_texture : enable
 
-layout (location = 0) in vec3 vertPosition;
-layout (location = 1) in vec3 vertNormal;
-layout (location = 2) in vec3 vertColor;
-layout (location = 3) in vec2 vertUv;
+    layout (location = 0) in vec3 vertPosition;
+    layout (location = 1) in vec3 vertNormal;
+    layout (location = 2) in vec3 vertColor;
+    layout (location = 3) in vec2 vertUv;
 
-uniform mat4 model;
-uniform mat3 nmat;
+    uniform mat4 model;
+    uniform mat3 nmat;
+  """
 
-"""
-
-const FragmentHeader* = """
-#version 330 core
-#extension GL_ARB_bindless_texture : enable
-
-"""
+  FragmentHeader* = """
+    #version 330 core
+    #extension GL_ARB_bindless_texture : enable
+    layout(bindless_sampler) uniform;
+  """
 
 type
-  Parameter = tuple[
-    name: NimNode,
-    typ: NimNode
-  ]
+  Parameter = tuple[name, typ: NimNode]
 
   Signature = object
     returnType: NimNode
@@ -35,7 +37,7 @@ iterator fields(node: NimNode): Parameter =
     if definition.kind == nnkIdentDefs:
       for index in 0 ..< definition.len - 2:
         yield (
-          name: definition[index],
+          name: definition[index], 
           typ: definition[^2]
         )
 
@@ -61,13 +63,18 @@ func fieldType(tupleType, name: NimNode): NimNode =
 func containsField(tupleType, name: NimNode): bool =
   not tupleType.fieldType(name).isNil
 
-proc signature(routine: NimNode): Signature =
+func signature(routine: NimNode): Signature =
   let params = routine.implementation.params
 
   result.returnType = params[0]
 
-  for field in params.fields:
-    result.parameters.add field
+  if result.returnType.kind != nnkEmpty:
+    let impl = result.returnType.getTypeImpl
+
+    if impl.kind == nnkTupleTy:
+      result.returnType = impl
+
+  result.parameters = params.fields.toSeq
 
 proc rootTypes(signature: Signature): seq[NimNode] =
   if signature.returnType.kind != nnkEmpty:
@@ -76,86 +83,153 @@ proc rootTypes(signature: Signature): seq[NimNode] =
   for param in signature.parameters:
     result.add param.typ
 
-func materialType*(
-  vert, frag: NimNode,
-  globals: NimNode
-): NimNode =
+proc localTypes(body: NimNode): seq[NimNode] =
+  var types: seq[NimNode]
+
+  proc visit(node: NimNode) =
+    case node.kind
+    of nnkProcDef, nnkFuncDef, nnkLambda:
+      return
+
+    of nnkLetSection, nnkVarSection:
+      for definition in node:
+        if definition.kind == nnkIdentDefs:
+          for index in 0 ..< definition.len - 2:
+            types.add definition[index].getTypeInst
+
+    else:
+      discard
+
+    for child in node:
+      visit child
+
+  visit body
+
+  types
+
+proc isTextureType(typ: NimNode): bool =
+  typ.kind == nnkBracketExpr and
+  typ[0].eqIdent(bindSym"Texture")
+
+proc glslBuiltinType(typ: NimNode): string =
+  for (nimType, glslName) in [
+    (bindSym"bool", "bool"),
+    (bindSym"float32", "float"),
+    (bindSym"float64", "float"),
+    (bindSym"int", "int"),
+    (bindSym"int32", "int"),
+    (bindSym"Vec2", "vec2"),
+    (bindSym"Vec3", "vec3"),
+    (bindSym"Vec4", "vec4"),
+    (bindSym"Mat3", "mat3"),
+    (bindSym"Mat4", "mat4")
+  ]:
+    if sameType(typ, nimType):
+      return glslName
+
+  let impl = typ.getTypeImpl
+
+  if impl.kind != nnkBracketExpr or not impl[0].eqIdent("array"):
+    return ""
+
+  let bounds = impl[1]
+
+  if bounds.kind != nnkInfix or not bounds[0].eqIdent(".."):
+    return ""
+
   let
-    vertParams = vert.implementation.params
-    fragParams = frag.implementation.params
-    vertOutput = vertParams[0]
-    globalsType = globals.getTypeImpl
-    VertexType = bindSym"Vertex"
+    length = bounds[2].intVal - bounds[1].intVal + 1
+    element = impl[^1].glslBuiltinType
 
-  proc addMaterials(material: var NimNode, params: NimNode) =
-    for field in params.fields:
-      if sameType(field.typ, VertexType):
-        continue
+  if length in 2 .. 4 and element == "float":
+    result = "vec" & $length
 
-      if field.name.strVal in ["model", "nmat"]:
-        continue
+  elif length in 3 .. 4 and element == "vec" & $length:
+    result = "mat" & $length
 
-      if globalsType.containsField(field.name) or
-         vertOutput.containsField(field.name) or
-         material.containsField(field.name):
-        continue
+proc arrayLength(impl: NimNode): int =
+  let bounds = impl[1]
 
-      material.add newIdentDefs(
-        field.name.strVal.ident,
-        field.typ.copyNimTree
-      )
+  if bounds.kind != nnkInfix or not bounds[0].eqIdent(".."):
+    error "shader arrays require a constant integer range", impl
 
-  result = newNimNode(nnkTupleTy)
-  result.addMaterials(vertParams)
-  result.addMaterials(fragParams)
+  let
+    first = bounds[1].intVal
+    last = bounds[2].intVal
 
-func attachmentsType*(frag: NimNode): NimNode =
-  frag.implementation.params[0]
+  if first != 0 or last < first:
+    error "shader arrays must be nonempty and zero-indexed", impl
+
+  int(last - first + 1)
 
 proc glslType(typ: NimNode): string =
-  # TODO: handle textures
+  result = typ.glslBuiltinType
 
-  let name = typ.repr
+  if result.len > 0:
+    return
 
-  case name
-  of "float32": "float"
-  of "Vec2": "vec2"
-  of "Vec3", "Color": "vec3"
-  of "Vec4": "vec4"
-  of "Mat3": "mat3"
-  of "Mat4": "mat4"
-  else: name
+  if typ.isTextureType:
+    return "sampler2D"
+
+  let impl = typ.getTypeImpl
+
+  if impl.kind == nnkBracketExpr and impl[0].eqIdent("array"):
+    let
+      length = impl.arrayLength
+      elementType = impl[^1].glslType
+
+    if elementType.endsWith("]"):
+      error "arrays of arrays require a newer GLSL version", typ
+
+    return elementType & "[" & $length & "]"
+
+  if impl.kind == nnkObjectTy:
+    return typ.repr
+
+  error "unsupported shader type: " & typ.repr, typ
+
+proc glslOperator(operator: NimNode): string =
+  case operator.strVal:
+  of "+", "-", "*", "/", "+=", "-=", 
+     "*=", "/=", "<=", ">=", "<", ">",
+     "!=", "==":
+    operator.strVal
+  of "and": "&&"
+  of "or": "||"
+  of "not": "!"
+  of "mod": "%"
+  else:
+    error "unsupported shader operator: " & operator.strVal, operator
+
+proc precedence(operator: string): int =
+  case operator:
+  of "||": 1
+  of "&&": 2
+  of "<=", ">=", ">", "<", "!=", "==": 3
+  of "+", "-": 4
+  of "*", "/", "%": 5
+  else: 0
+
+proc precedence(node: NimNode): int =
+  case node.kind
+  of nnkInfix:
+    node[0].glslOperator.precedence
+  of nnkPrefix:
+    6
+  of nnkFloatLit..nnkFloat64Lit:
+    if node.floatVal < 0: 6 else: 7
+  of nnkIntLit..nnkUInt64Lit:
+    if node.intVal < 0: 6 else: 7
+  else:
+    7
 
 proc declaration(typ: NimNode, name: string): string =
-  # TODO: handle arrays
   typ.glslType & " " & name & ";\n"
 
 proc structTypes(roots: openArray[NimNode]): seq[NimNode] =
   var
     visited: seq[NimNode]
     structs: seq[NimNode]
-
-  proc isGlslLeafType(typ: NimNode): bool =
-    for knownType in [
-      bindSym"Vertex",
-      bindSym"float32",
-      bindSym"Vec2",
-      bindSym"Vec3",
-      bindSym"Vec4",
-      bindSym"Mat3",
-      bindSym"Mat4"
-    ]:
-      if sameType(typ, knownType):
-        return true
-
-  proc isTextureType(typ: NimNode): bool =
-    typ.kind == nnkBracketExpr and
-    typ[0].eqIdent(bindSym"Texture")
-
-  proc wasVisited(typ: NimNode): bool =
-    for visitedType in visited:
-      if sameType(typ, visitedType):
-        return true
 
   proc visit(typ: NimNode)
 
@@ -172,10 +246,11 @@ proc structTypes(roots: openArray[NimNode]): seq[NimNode] =
         visitFields child
 
   proc visit(typ: NimNode) =
-    if typ.isGlslLeafType or typ.isTextureType:
+    if sameType(typ, bindSym"Vertex") or typ.isTextureType or
+       typ.glslBuiltinType.len > 0:
       return
 
-    if typ.wasVisited:
+    if visited.anyIt(sameType(it, typ)):
       return
 
     visited.add typ
@@ -205,132 +280,479 @@ proc structTypes(roots: openArray[NimNode]): seq[NimNode] =
   for root in roots:
     visit root
 
-  result = structs
+  structs
 
-proc emitStructDefs(structs: openArray[NimNode]): string =
-  for typ in structs:
-    let impl = typ.getTypeImpl
+proc emitUsedStructs(
+  shader: NimNode, 
+  helpers: openArray[NimNode]
+): string =
+  proc emitStructDef(struct: NimNode): string =
+    let impl = struct.getTypeImpl
 
-    result.add "struct " & typ.repr & " {\n"
+    result.add "struct " & struct.repr & " {\n"
 
     for field in impl[^1].fields:
-      result.add "  " & declaration(field.typ, field.name.strVal)
+      result.add "  " & 
+        declaration(field.typ, field.name.strVal)
 
     result.add "};\n\n"
 
-proc precedence(operator: string): int=
-  case operator:
-  of "+", "-": 1
-  of "*", "/": 2
-  else: 0
+  var roots: seq[NimNode] 
 
-proc emitExpr(
-  node: NimNode, 
-  parentPrecedence = 0,
-  isRightOperand = false
+  roots.add shader.signature.rootTypes
+
+  roots.add shader.implementation.body.localTypes
+
+  for helper in helpers:
+    roots.add helper.signature.rootTypes
+    roots.add helper.implementation.body.localTypes
+
+  result.add "\n" & roots
+    .structTypes
+    .mapIt(it.emitStructDef)
+    .join("\n")
+
+proc intrinsicName(symbol: NimNode): string =
+  if symbol.kind != nnkSym:
+    return ""
+
+  if symbol.symKind notin {nskProc, nskFunc}:
+    return ""
+
+  proc matches(intrinsic: NimNode): bool =
+    symbol == intrinsic or
+    symbol.isInstantiationOf(intrinsic)
+
+  for (intrinsic, name) in [
+    (bindSym"hom", "vec4"),
+    (bindSym"xyz", ".xyz"),
+    (bindSym"xy", ".xy"),
+    (bindSym"sample", "texture"),
+    (bindSym"normalize", "normalize"),
+    (bindSym"dot", "dot"),
+    (bindSym"pow", "pow"),
+    (bindSym"clamp", "clamp"),
+    (bindSym"sqrt", "sqrt"),
+    (bindSym"invsqrt", "inversesqrt"),
+    (bindSym"vec", "vec"),
+    (bindSym"vec3", "vec3"),
+    (bindSym"mix", "mix"),
+    (bindSym"size", "textureSize"),
+    (bindSym"abs", "abs"),
+    (bindSym"max", "max"),
+    (bindSym"cross", "cross"),
+    (bindSym"transpose", "transpose"),
+  ]:
+    if intrinsic.kind in {nnkOpenSymChoice, nnkClosedSymChoice}:
+      for overload in intrinsic:
+        if matches(overload):
+          return name
+
+    elif matches(intrinsic):
+      return name
+
+proc containsGenericParameter(node: NimNode): bool =
+  if node.kind == nnkSym and node.symKind == nskGenericParam:
+    return true
+
+  for child in node:
+    if child.containsGenericParameter:
+      return true
+
+proc helpers(body: NimNode): seq[NimNode] =
+  var
+    collected: seq[NimNode]
+    active: seq[NimNode]
+
+  proc visit(node: NimNode)
+
+  proc visitHelper(symbol: NimNode) =
+    if symbol.kind != nnkSym:
+      return
+
+    if symbol.symKind notin {nskProc, nskFunc}:
+      return
+
+    if symbol.intrinsicName.len > 0:
+      return
+
+    if symbol in collected:
+      return
+
+    if symbol in active:
+      error "recursive shader helpers are not supported", symbol
+
+    let impl = symbol.getImpl
+
+    if impl.kind notin {nnkProcDef, nnkFuncDef}:
+      return
+
+    if impl[2].len > 0 or impl.params.containsGenericParameter:
+      error(
+        "cannot emit shader helper '" & symbol.strVal & "': " &
+        "its implementation still contains generic parameters.\n",
+        symbol
+      )
+
+    for pragma in impl.pragma:
+      let name =
+        if pragma.kind == nnkExprColonExpr: pragma[0]
+        else: pragma
+
+      if name.eqIdent("magic") or name.eqIdent("importc"):
+        return
+
+    if impl.body.kind == nnkEmpty:
+      return
+
+    active.add symbol
+    visit impl.body
+    active.setLen(active.len - 1)
+
+    collected.add symbol
+
+  proc visit(node: NimNode) =
+    if node.kind in {nnkProcDef, nnkFuncDef, nnkLambda}:
+      return
+
+    if node.kind in {nnkCall, nnkCommand}:
+      visitHelper node[0]
+
+    for child in node:
+      visit child
+
+  visit body
+
+  collected
+
+proc emitBody(
+  body: NimNode,
+  isShaderMain = false,
+  hasResult = false
 ): string =
-  case node.kind
-  of nnkIdent, nnkSym:
-    result = node.strVal
+  proc emitExpr(
+    node: NimNode,
+    parentPrecedence = 0,
+    isRightOperand = false
+  ): string =
+    case node.kind
+    of nnkIdent:
+      result = node.strVal
 
-  of nnkDotExpr:
-    let field = node[1].strVal
+    of nnkSym:
+      if node == bindSym"Identity3":
+        result = "mat3(1.0)"
 
-    result =
-      if node[0].eqIdent("result"):
-        if field == "pos": "gl_Position"
-        else: field
-      elif sameType(node[0].getTypeImpl, bindSym"Vertex"):
-        "vert" & field.capitalizeAscii
+      elif node == bindSym"Identity4":
+        result = "mat4(1.0)"
+
+      elif node.symKind == nskConst:
+        let 
+          impl = node.getImpl
+          value =
+            if impl.kind == nnkConstDef: impl[^1]
+            else: impl
+
+        return value.emitExpr(
+          parentPrecedence, 
+          isRightOperand
+        )
+
       else:
-        node[0].emitExpr & "." & field
+        let name = node.intrinsicName
 
-  of nnkCall:
-    if node[0].eqIdent("hom"):
-      if node.len != 3:
-        error "hom expects two arguments", node
+        result =
+          if name.len > 0: name
+          else: node.strVal
 
-      result =
-        "vec4(" &
-        node[1].emitExpr & ", " &
-        node[2].emitExpr & ")"
+    of nnkDotExpr:
+      let field = node[1].strVal
 
-  of nnkStmtListExpr:
-    for index in 0 ..< node.len - 1:
-      if node[index].kind != nnkEmpty:
-        error "statements inside expressions are not supported yet", node
+      if isShaderMain and node[0].eqIdent("result"):
+        result = 
+          if field == "pos": "gl_Position" 
+          else: field
 
-    result = node[^1].emitExpr
+      elif isShaderMain and 
+        sameType(node[0].getTypeImpl, bindSym"Vertex"):
+        result = "vert" & field.capitalizeAscii
 
-  of nnkBracketExpr:
-    result =
-      node[0].emitExpr & "[" &
-      node[1].emitExpr & "]"
+      else:
+        result = node[0].emitExpr(7) & "." & field
 
-  of nnkInfix:
-    let 
-      operator = node[0].strVal
-      precedence = operator.precedence
+    of nnkCall, nnkCommand:
+      let
+        callee = node[0]
+        intrinsic = callee.intrinsicName
 
-    result = 
-      node[1].emitExpr(precedence, false) & " " &
-      operator & " " &
-      node[2].emitExpr(precedence, true)
+      case intrinsic
+      of ".xy", ".xyz":
+        if node.len != 2:
+          error "swizzle expects one argument", node
 
-    if precedence < parentPrecedence or
-      (precedence == parentPrecedence and isRightOperand):
+        result = node[1].emitExpr(7) & intrinsic
+
+      of "textureSize":
+        if node.len != 2:
+          error "texture size expects one argument", node
+
+        result = "vec2(textureSize(" & node[1].emitExpr & ", 0))"
+
+      else:
+        let args = node.toSeq[1..^1]
+          .mapIt(it.emitExpr)
+          .join(", ")
+
+        result = callee.emitExpr & "(" & args & ")"
+
+    of nnkStmtListExpr:
+      for index in 0 ..< node.len - 1:
+        if node[index].kind notin {nnkEmpty, nnkProcDef, nnkFuncDef}:
+          error "statements inside expressions are not supported yet", node
+
+      return node[^1].emitExpr(
+        parentPrecedence, 
+        isRightOperand
+      )
+
+    of nnkBracketExpr:
+      result = node[0].emitExpr(7) & "[" & node[1].emitExpr & "]"
+
+    of nnkBracket:
+      result = node.getTypeInst.glslType & "(" &
+        node.toSeq.mapIt(it.emitExpr).join(", ") & ")"
+
+    of nnkInfix:
+      let operator = node[0].glslOperator
+
+      result = node[1].emitExpr(node.precedence) & 
+        " " & operator & " " &
+        node[2].emitExpr(node.precedence, true)
+
+    of nnkPrefix:
+      result = node[0].glslOperator &
+        node[1].emitExpr(node.precedence, true)
+
+    of nnkIfExpr:
+      result = "("
+
+      for branch in node:
+        case branch.kind
+        of nnkElifExpr, nnkElifBranch:
+          result.add branch[0].emitExpr & " ? " &
+            branch[1].emitExpr & " : "
+
+        of nnkElseExpr, nnkElse:
+          result.add branch[0].emitExpr
+
+        else:
+          error "unsupported shader conditional branch", branch
+
+      result.add ")"
+
+    of nnkHiddenStdConv, nnkHiddenSubConv, 
+      nnkHiddenAddr, nnkHiddenDeref:
+      return node[^1].emitExpr(
+        parentPrecedence, 
+        isRightOperand
+      )
+
+    of nnkConv:
+      result = node[0].glslType & "(" & node[1].emitExpr & ")"
+
+    of nnkFloatLit..nnkFloat64Lit:
+      result = $node.floatVal
+
+    of nnkIntLit..nnkUInt64Lit:
+      result = $node.intVal
+
+    else:
+      error "unsupported shader expression: " & $node.kind, node
+
+    if node.precedence < parentPrecedence or
+       (node.precedence == parentPrecedence and isRightOperand):
       result = "(" & result & ")"
 
-  of nnkPrefix:
-    result = node[0].strVal & node[1].emitExpr
+  proc emitStmt(node: NimNode): string =
+    case node.kind
+    of nnkStmtList:
+      for statement in node:
+        result.add statement.emitStmt
 
-  of nnkIfExpr:
-    result = node[0].emitExpr & " : " & node[1].emitExpr
+    of nnkAsgn:
+      let value = node[1]
 
-  of nnkElifExpr:
-    result = node[0].emitExpr & " ? " & node[1].emitExpr
+      if value.kind == nnkStmtListExpr:
+        result = "{\n"
 
-  of nnkElseExpr:
-    result = node[0].emitExpr
-      
-  of nnkHiddenStdConv, nnkHiddenSubConv:
-    result = node[^1].emitExpr(parentPrecedence, isRightOperand)
+        for index in 0 ..< value.len - 1:
+          result.add value[index].emitStmt
 
-  of nnkFloatLit..nnkFloat64Lit:
-    result = node.repr
+        result.add newTree(
+          nnkAsgn,
+          node[0],
+          value[^1]
+        ).emitStmt
 
-  of nnkIntLit..nnkUInt64Lit:
-    result = $node.intVal
+        result.add "}\n"
 
-  else:
-    echo(
-      "unsupported expression: " &
-      $node.kind & ":\n" &
-      node.treeRepr
-    )
+      else:
+        result = node[0].emitExpr & " = " & value.emitExpr & ";\n"
 
-proc emitStmt(node: NimNode): string =
-  case node.kind
-  of nnkStmtList:
-    for statement in node:
-      result.add statement.emitStmt
+    of nnkLetSection, nnkVarSection:
+      for definition in node:
+        let value = definition[^1]
 
-  of nnkAsgn:
-    result.add(
-      "  " &
-      node[0].emitExpr & " = " &
-      node[1].emitExpr & ";\n"
-    )
+        let initializer =
+          if value.kind == nnkEmpty: ""
+          else: " = " & value.emitExpr
 
-  else:
-    discard
+        for index in 0 ..< definition.len - 2:
+          let
+            symbol = definition[index]
+            typ = symbol.getTypeInst
 
-proc emitMain(shader: NimNode): string =
-  let body = shader.implementation.body
+          if typ.isTextureType:
+            error "local texture declarations are not supported", symbol
 
-  result = "void main() {\n"
-  result.add body.emitStmt
+          result.add typ.glslType & " " & symbol.strVal & initializer & ";\n"
+
+    of nnkInfix, nnkCall, nnkCommand:
+      result = node.emitExpr & ";\n"
+
+    of nnkIfStmt:
+      for index, branch in node:
+        if index > 0:
+          result.add " else "
+
+        if branch.kind == nnkElifBranch:
+          result.add "if (" & branch[0].emitExpr & ") "
+
+        result.add "{\n" & branch[^1].emitStmt & "}"
+
+      result.add "\n"
+
+    of nnkForStmt:
+      if node.len != 3:
+        error "unsupported shader loop", node
+
+      let
+        variable = node[0]
+        interval = node[1]
+        name = variable.strVal
+
+      if interval.kind notin {nnkInfix, nnkCall} or interval.len != 3:
+        error "unsupported shader loop iterator", interval
+
+      let
+        start = interval[1].emitExpr
+        finish = interval[2].emitExpr
+        comparison =
+          case interval[0].strVal
+          of "..<": "<"
+          of "..": "<="
+          else:
+            error "unsupported shader loop iterator", interval
+
+      result = "for (" & variable.getTypeInst.glslType & " " &
+        name & " = " & start & "; " & name & " " & 
+        comparison & " " & finish & "; ++" & 
+        name & ") {\n" & node[^1].emitStmt & "}\n"
+
+    of nnkReturnStmt:
+      let value = node[0]
+
+      if value.kind == nnkAsgn:
+        result.add value.emitStmt
+
+      elif value.kind != nnkEmpty:
+        return "return " & value.emitExpr & ";\n"
+
+      result.add(
+        if hasResult and not isShaderMain: "return result;\n"
+        else: "return;\n"
+      )
+
+    of nnkDiscardStmt:
+      if node[0].kind != nnkEmpty:
+        result.add node[0].emitExpr
+
+      result.add ";\n"
+
+    of nnkProcDef, nnkFuncDef:
+      discard
+
+    else:
+      error "unsupported shader statement: " & $node.kind, node
+
+  body.emitStmt
+
+proc emitHelper(helper: NimNode): string =
+  proc zeroValue(typ: NimNode): string =
+    let name = typ.glslType
+    var values = @["0"]
+
+    if typ.glslBuiltinType.len == 0:
+      let impl = typ.getTypeImpl
+
+      if impl.kind == nnkBracketExpr and impl[0].eqIdent("array"):
+        values = newSeqWith(impl.arrayLength, impl[^1].zeroValue)
+
+      elif impl.kind == nnkObjectTy:
+        values = impl[^1].fields.toSeq.mapIt(it.typ.zeroValue)
+
+    name & "(" & values.join(", ") & ")"
+
+  let
+    signature = helper.signature
+
+    body = helper.implementation.body
+
+    hasResult = signature.returnType.kind != nnkEmpty
+
+    parameters = signature.parameters.mapIt(
+      it.typ.glslType & " " & it.name.strVal
+    ).join(", ")
+
+    returnType =
+      if hasResult: signature.returnType.glslType
+      else: "void"
+
+  result =
+    returnType & " " & helper.strVal &
+    "(" & parameters & ") {\n"
+
+  if hasResult and signature.returnType.isTextureType:
+    error "shader helpers cannot return textures", helper
+
+  if hasResult:
+    result.add returnType & " result = " &
+      signature.returnType.zeroValue & ";\n"
+
+  result.add body.emitBody(hasResult = hasResult)
+
+  if hasResult:
+    result.add "return result;\n"
+
   result.add "}\n"
+
+proc emitMain(body: NimNode): string =
+  "\nvoid main() {\n" & 
+  body.emitBody(isShaderMain = true) & 
+  "}"
+
+proc validateOutputType(typ: NimNode) =
+  for allowed in [
+    bindSym"float32",
+    bindSym"int32",
+    bindSym"Vec2",
+    bindSym"Vec3",
+    bindSym"Vec4"
+  ]:
+    if sameType(typ, allowed):
+      return
+
+  error "unsupported shader output type: " & typ.repr, typ
 
 proc vertGlslImpl*(shader: NimNode): string =
   let signature = shader.signature
@@ -338,24 +760,36 @@ proc vertGlslImpl*(shader: NimNode): string =
   if signature.returnType.kind != nnkTupleTy:
     error "vertex shader must return a tuple", shader
 
-  let structs = block:
-    var roots: seq[NimNode]
+  let posType = signature.returnType.fieldType(ident"pos")
 
-    roots.add signature.rootTypes
+  if posType.isNil:
+    error "vertex shader must have pos output", shader
 
-    # TODO: add roots of helpers
-    # TODO: add local types
+  if not sameType(posType, bindSym"Vec4"):
+    error "vertex shader pos output must be vec4", shader
 
-    roots.structTypes
+  let
+    body = shader.implementation.body
+    helpers = body.helpers
 
-  result = VertexHeader
-  result.add structs.emitStructDefs
+  result.add VertexHeader.dedent
+  result.add emitUsedStructs(shader, helpers)
 
   for field in signature.returnType.fields:
+    let typ = field.typ
+
+    if not sameType(typ, bindSym"Mat3") and
+       not sameType(typ, bindSym"Mat4"):
+      validateOutputType(typ)
+
     if field.name.strVal == "pos":
       continue
 
-    result.add "out " & declaration(field.typ, field.name.strVal)
+    let qualifier = 
+      if sameType(typ, bindSym"int32"): "flat out " 
+      else: "out "
+
+    result.add qualifier & declaration(typ, field.name.strVal)
 
   for param in signature.parameters:
     if sameType(param.typ, bindSym"Vertex"):
@@ -364,49 +798,49 @@ proc vertGlslImpl*(shader: NimNode): string =
     if param.name.strVal in ["model", "nmat"]:
       continue
 
-    # TODO: handle undefined types
-
     result.add "uniform " & declaration(param.typ, param.name.strVal)
 
-  result.add shader.emitMain
+  result.add "\n" & helpers
+    .mapIt(it.emitHelper)
+    .join("\n")
+
+  result.add body.emitMain
 
 proc fragGlslImpl*(vert, frag: NimNode): string =
   let
     signature = frag.signature
     returnType = signature.returnType
-    vertReturnType = vert.signature.returnType
+    vertSignature = vert.signature
 
   if returnType.kind != nnkTupleTy:
     error "fragment shader must return a tuple", frag
 
-  let structs = block:
-    var roots: seq[NimNode]
+  if returnType.containsField(ident"pos"):
+    error "'pos' is reserved for vertex shader outputs", frag
 
-    roots.add signature.rootTypes
+  let
+    body = frag.implementation.body
+    helpers = body.helpers
 
-    # TODO: add roots of helpers
-    # TODO: add local types
+  result.add FragmentHeader.dedent
+  result.add emitUsedStructs(frag, helpers)
 
-    roots.structTypes
+  for location, field in returnType.fields.toSeq:
+    validateOutputType(field.typ)
 
-  result = FragmentHeader
-  result.add structs.emitStructDefs
-
-  var location = 0
-
-  for field in returnType.fields:
     result.add(
       "layout (location = " & $location & ") out " &
       declaration(field.typ, field.name.strVal)
     )
 
-    inc location
-
   for param in signature.parameters:
     let
       name = param.name.strVal
-      varyingType = vertReturnType.fieldType(param.name)
+      varyingType = vertSignature.returnType.fieldType(param.name)
       isVarying = name != "pos" and not varyingType.isNil
+
+    if isVarying and varyingType.isTextureType:
+      error "texture '" & name & "' cannot be a varying", param.name
 
     if isVarying and not sameType(param.typ, varyingType):
       error(
@@ -416,14 +850,58 @@ proc fragGlslImpl*(vert, frag: NimNode): string =
         param.name
       )
 
-    let qualifier = if isVarying: "in " else: "uniform "
+    if not isVarying:
+      for vertParam in vertSignature.parameters:
+        if vertParam.name.strVal == name and
+           not sameType(param.typ, vertParam.typ):
+          error "conflicting uniform types for '" & name & "'", param.name
+
+    let qualifier =
+      if not isVarying: "uniform "
+      elif sameType(param.typ, bindSym"int32"): "flat in "
+      else: "in "
 
     result.add qualifier & declaration(param.typ, name)
 
-  result.add frag.emitMain
+  result.add "\n" & helpers
+    .mapIt(it.emitHelper)
+    .join("\n")
+
+  result.add body.emitMain
 
 macro vertGlsl*(shader: typed): string =
   newStrLitNode vertGlslImpl(shader)
 
 macro fragGlsl*(vert, frag: typed): string =
   newStrLitNode fragGlslImpl(vert, frag)
+
+func materialType*(
+  vert, frag: NimNode,
+  globals: NimNode
+): NimNode =
+  let
+    vertSignature = vert.signature
+    fragSignature = frag.signature
+    globalsType = globals.getTypeImpl
+
+  result = newNimNode(nnkTupleTy)
+
+  for param in vertSignature.parameters & fragSignature.parameters:
+    if sameType(param.typ, bindSym"Vertex"):
+      continue
+
+    if param.name.strVal in ["model", "nmat"]:
+      continue
+
+    if globalsType.containsField(param.name) or
+       vertSignature.returnType.containsField(param.name) or
+       result.containsField(param.name):
+      continue
+
+    result.add newIdentDefs(
+      param.name.strVal.ident,
+      param.typ.copyNimTree
+    )
+
+func attachmentsType*(frag: NimNode): NimNode =
+  frag.signature.returnType.copyNimTree

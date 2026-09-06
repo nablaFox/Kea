@@ -46,7 +46,6 @@ proc shaderQuadruple(x: float32): float32 =
 proc unusedShaderHelper(x: float32): float32 =
   x + 1.0
 
-
 proc shaderExplicitReturn(x: float32): float32 =
   return x * 2.0
 
@@ -61,8 +60,11 @@ proc shaderWithLocalStruct(x: float32): float32 =
 proc shaderWithStructParameter(input: HelperInput): float32 =
   input.value
 
-macro inferredMaterial(vert, frag: typed): untyped =
-  materialType(vert, frag, bindSym"EmptyGlobals")
+proc shaderWithNestedHelper(x: float32): float32 =
+  proc innerDouble(value: float32): float32 =
+    value * 2.0
+
+  innerDouble(x)
 
 
 suite "shader source generation":
@@ -93,6 +95,17 @@ suite "shader source generation":
 
 
 suite "shader type generation":
+  test "maps int32 uniforms and outputs":
+    let glsl = fragGlsl(
+      positionOnlyVertex,
+
+      proc(value: int32): tuple[pixel: int32] =
+        result.pixel = value
+    )
+
+    check "uniform int value;" in glsl
+    check "layout (location = 0) out int pixel;" in glsl
+
   test "maps scalar, vector, and matrix types":
     let glsl = fragGlsl(
       positionOnlyVertex,
@@ -274,6 +287,23 @@ suite "shader interface generation":
     check "in vec3 color;" in glsl
     check "uniform vec3 color;" notin glsl
 
+  test "uses flat interpolation for integer varyings":
+    proc vertex(vert: Vertex, value: int32): tuple[pos: Vec4, category: int32] =
+      result.pos = vert.position.hom
+      result.category = value
+
+    let
+      vs = vertGlsl(vertex)
+      fs = fragGlsl(
+        vertex,
+
+        proc(category: int32): tuple[pixel: int32] =
+          result.pixel = category
+      )
+
+    check "flat out int category;" in vs
+    check "flat in int category;" in fs
+
   test "does not expose vertex pos as fragment input":
     let glsl = fragGlsl(
       positionOnlyVertex,
@@ -322,6 +352,9 @@ suite "shader interface generation":
     check glsl.count("uniform mat3 nmat;") == 1
 
   test "merges matching material fields from both stages":
+    macro inferredMaterial(vert, frag: typed): untyped =
+      materialType(vert, frag, bindSym"EmptyGlobals")
+
     type Material = inferredMaterial(
       proc(vert: Vertex, strength: float32): tuple[pos: Vec4] =
         result.pos = vert.position.hom,
@@ -421,6 +454,18 @@ suite "shader expression generation":
 
     check "pixel = -value;" in glsl
 
+  test "preserves grouping under unary minus":
+    let glsl = fragGlsl(
+      positionOnlyVertex,
+
+      proc(a, b: float32): tuple[sum, negation: float32] =
+        result.sum = -(a + b)
+        result.negation = -(-a)
+    )
+
+    check "sum = -(a + b);" in glsl
+    check "negation = -(-a);" in glsl
+
   test "emits ternary expressions":
     let glsl = fragGlsl(
       positionOnlyVertex,
@@ -431,41 +476,20 @@ suite "shader expression generation":
           else: -value
     )
 
-    check "pixel = 0.0 <= value ? value : -value;" in glsl
+    check "pixel = (0.0 <= value ? value : -value);" in glsl
 
-  test "emits comparison and boolean operators":
+  test "preserves all branches of ternary expressions":
     let glsl = fragGlsl(
       positionOnlyVertex,
 
-      proc(
-        value: float32,
-        lower: float32,
-        upper: float32
-      ): tuple[pixel: float32] =
-        if value >= lower and value <= upper:
-          result.pixel = value
-        else:
-          result.pixel = 0.0
+      proc(value: float32): tuple[pixel: float32] =
+        result.pixel =
+          if value < 0.0: -1.0
+          elif value > 0.0: 1.0
+          else: 0.0
     )
 
-    check "if (value >= lower && value <= upper) {" in glsl
-
-  test "emits not and or operators":
-    let glsl = fragGlsl(
-      positionOnlyVertex,
-
-      proc(
-        value: float32,
-        lower: float32,
-        upper: float32
-      ): tuple[pixel: float32] =
-        if not (value < lower or value > upper):
-          result.pixel = value
-        else:
-          result.pixel = 0.0
-    )
-
-    check "if (!(value < lower || value > upper)) {" in glsl
+    check "pixel = (value < 0.0 ? -1.0 : 0.0 < value ? 1.0 : 0.0);" in glsl
 
   test "emits vector indexing":
     let glsl = fragGlsl(
@@ -477,32 +501,62 @@ suite "shader expression generation":
 
     check "pixel = value[2];" in glsl
 
+  test "preserves grouping before indexing and xyz swizzles":
+    let glsl = fragGlsl(
+      positionOnlyVertex,
+
+      proc(a, b: Vec4): tuple[component: float32, color: Vec3] =
+        result.component = (a + b)[2]
+        result.color = (a + b).xyz
+    )
+
+    check "component = (a + b)[2];" in glsl
+    check "color = (a + b).xyz;" in glsl
+    check "xyz(" notin glsl
+
   test "emits numeric conversions":
     let glsl = fragGlsl(
       positionOnlyVertex,
 
-      proc(): tuple[pixel: float32] =
-        var total = 0.0'f32
-
-        for i in 0 ..< 4:
-          total += i.float32
-
-        result.pixel = total
+      proc(index: int): tuple[pixel: float32] =
+        result.pixel = index.float32
     )
 
-    check "total += float(i);" in glsl
+    check "pixel = float(index);" in glsl
 
   test "emits float32 array literals as vectors":
     let glsl = fragGlsl(
       positionOnlyVertex,
 
       proc(): tuple[pixel: Vec4] =
-        let radiance = [1.0'f, 2.0, 0.5]
-        result.pixel = radiance.hom
+        result.pixel = [1.0'f, 2.0, 0.5, 1.0]
     )
 
-    check "vec3 radiance = vec3(1.0, 2.0, 0.5);" in glsl
-    check "pixel = vec4(radiance, 1.0);" in glsl
+    check "pixel = vec4(1.0, 2.0, 0.5, 1.0);" in glsl
+
+  test "emits nested float32 array literals as matrices":
+    let glsl = fragGlsl(
+      positionOnlyVertex,
+
+      proc(): tuple[pixel: float32] =
+        let matrix: Mat3 = [
+          [1.0'f, 2.0, 3.0],
+          [4.0'f, 5.0, 6.0],
+          [7.0'f, 8.0, 9.0]
+        ]
+
+        result.pixel = matrix[0][1]
+    )
+
+    check (
+      "mat3 matrix = mat3(" &
+      "vec3(1.0, 2.0, 3.0), " &
+      "vec3(4.0, 5.0, 6.0), " &
+      "vec3(7.0, 8.0, 9.0));"
+    ) in glsl
+
+    check "pixel = matrix[0][1];" in glsl
+
 
 suite "shader body generation":
   test "emits direct assignments":
@@ -572,26 +626,77 @@ suite "shader body generation":
     check "float doubled = value * 2.0;" in glsl
     check "pixel = doubled;" in glsl
 
-  test "emits conditional statements":
+  test "emits multiple let bindings with different types":
+    let glsl = fragGlsl(
+      positionOnlyVertex,
+
+      proc(): tuple[
+        pixel: Vec4
+      ] =
+        let
+          intensity = 1.0'f
+          count = 2
+          uv = [3.0'f, 2.0]
+
+        result.pixel = [intensity, count.float32, uv.x, uv.y]
+    )
+
+    check "float intensity = 1.0;" in glsl
+    check "int count = 2;" in glsl
+    check "vec2 uv = vec2(3.0, 2.0);" in glsl
+    check "pixel = vec4(intensity, float(count), uv[0], uv[1])" in glsl
+
+  test "emits comparison and boolean operators":
+    let glsl = fragGlsl(
+      positionOnlyVertex,
+
+      proc(value, lower, upper: float32): tuple[pixel: float32] =
+        if value >= lower and value <= upper:
+          result.pixel = value
+    )
+
+    check "if (lower <= value && value <= upper) {" in glsl
+
+  test "preserves grouping between boolean operators":
+    let glsl = fragGlsl(
+      positionOnlyVertex,
+
+      proc(a, b, c: float32): tuple[pixel: float32] =
+        if (a < 0.0 or b < 0.0) and c < 0.0:
+          result.pixel = 1.0
+    )
+
+    check "if ((a < 0.0 || b < 0.0) && c < 0.0) {" in glsl
+
+  test "lowers boolean negation and preserves its operand":
+    let glsl = fragGlsl(
+      positionOnlyVertex,
+
+      proc(a, b: float32): tuple[pixel: float32] =
+        if not (a < 0.0 or b < 0.0):
+          result.pixel = 1.0
+    )
+
+    check "if (!(a < 0.0 || b < 0.0)) {" in glsl
+
+  test "emits if else control flow":
     let glsl = fragGlsl(
       positionOnlyVertex,
 
       proc(value: float32): tuple[pixel: float32] =
-        if value < 0.0:
-          result.pixel = -value
-        else:
+        if value > 0.0:
           result.pixel = value
+        else:
+          result.pixel = 0.0
     )
 
-    let expected = """
-      if (value < 0.0) {
-        pixel = -value;
-      } else {
+    check """
+      if (0.0 < value) {
         pixel = value;
+      } else {
+        pixel = 0.0;
       }
-    """
-
-    check expected.splitWhitespace.join(" ") in glsl.splitWhitespace.join(" ")
+    """.normalized in glsl.normalized
 
   test "emits elif branches":
     let glsl = fragGlsl(
@@ -607,15 +712,37 @@ suite "shader body generation":
     )
 
     check "if (value < 0.0) {" in glsl
-    check "} else if (value > 0.0) {" in glsl
+    check "} else if (0.0 < value) {" in glsl
     check "} else {" in glsl
+
+  test "emits compound assignments":
+    let glsl = fragGlsl(
+      positionOnlyVertex,
+
+      proc(value: float32): tuple[pixel: float32] =
+        var total = value
+        total += value
+        total -= value
+        total *= value
+        total /= value
+        result.pixel = total
+    )
+
+    let expected = """
+      total += value;
+      total -= value;
+      total *= value;
+      total /= value;
+    """
+
+    check expected.normalized in glsl.normalized
 
   test "emits exclusive range for loops":
     let glsl = fragGlsl(
       positionOnlyVertex,
 
       proc(value: float32): tuple[pixel: float32] =
-        var total = 0.0'f32
+        var total = 0.0'f
 
         for i in 0 ..< 4:
           total += value
@@ -631,7 +758,7 @@ suite "shader body generation":
       positionOnlyVertex,
 
       proc(value: float32): tuple[pixel: float32] =
-        var total = 0.0'f32
+        var total = 0.0'f
 
         for i in 0 .. 4:
           total += value
@@ -661,6 +788,18 @@ suite "shader body generation":
 
 
 suite "shader helper generation":
+  test "preserves calls whose return values are discarded":
+    let glsl = fragGlsl(
+      positionOnlyVertex,
+
+      proc(value: float32): tuple[pixel: float32] =
+        discard shaderDouble(value)
+        result.pixel = value
+    )
+
+    check "shaderDouble(value);" in glsl
+    check "pixel = value;" in glsl
+
   test "emits used helper functions once":
     let glsl = fragGlsl(
       positionOnlyVertex,
@@ -699,7 +838,8 @@ suite "shader helper generation":
     )
 
     check "float shaderDouble(float x) {" in glsl
-    check "return x * 2.0;" in glsl
+    check "result = x * 2.0;" in glsl
+    check "return result;" in glsl
     check "pixel = shaderDouble(value);" in glsl
 
   test "does not emit unused helper functions":
@@ -721,7 +861,8 @@ suite "shader helper generation":
     )
 
     check "float shaderExplicitReturn(float x) {" in glsl
-    check "return x * 2.0;" in glsl
+    check "result = x * 2.0;" in glsl
+    check "return result;" in glsl
     check "pixel = shaderExplicitReturn(value);" in glsl
 
   test "emits helper result assignments":
@@ -771,6 +912,46 @@ suite "shader helper generation":
     check helperPosition > structPosition
     check "LocalValue local" in glsl
 
+  test "emits helpers defined inside the shader":
+    let glsl = fragGlsl(
+      positionOnlyVertex,
+
+      proc(value: float32): tuple[pixel: float32] =
+        proc innerDouble(x: float32): float32 =
+          x * 2.0
+
+        result.pixel = innerDouble(value)
+    )
+
+    let helperPosition = glsl.find("float innerDouble(float x) {")
+    let mainPosition = glsl.find("void main() {")
+
+    check helperPosition >= 0
+    check mainPosition > helperPosition
+    check glsl.count("float innerDouble(") == 1
+    check "result = x * 2.0;" in glsl
+    check "pixel = innerDouble(value);" in glsl
+
+  test "emits helpers defined inside helpers":
+    let glsl = fragGlsl(
+      positionOnlyVertex,
+
+      proc(value: float32): tuple[pixel: float32] =
+        result.pixel = shaderWithNestedHelper(value)
+    )
+
+    let
+      innerPosition = glsl.find("float innerDouble(float value) {")
+      outerPosition = glsl.find("float shaderWithNestedHelper(float x) {")
+      mainPosition = glsl.find("void main() {")
+
+    check innerPosition >= 0
+    check outerPosition > innerPosition
+    check mainPosition > outerPosition
+    check glsl.count("float innerDouble(") == 1
+    check glsl.count("float shaderWithNestedHelper(") == 1
+    check "result = innerDouble(x);" in glsl
+    check "pixel = shaderWithNestedHelper(value);" in glsl
 
 suite "complete shader generation":
   test "generates position-only vertex shader":
@@ -812,6 +993,16 @@ suite "complete shader generation":
 
 
 suite "shader validation":
+  test "rejects unsupported expressions instead of emitting empty code":
+    check not compiles(
+      fragGlsl(
+        positionOnlyVertex,
+
+        proc(value: float32): tuple[pixel: float32] =
+          result.pixel = shaderWithStructParameter(HelperInput(value: value))
+      )
+    )
+
   test "rejects non-tuple vertex output":
     check not compiles(
       vertGlsl(
@@ -851,8 +1042,8 @@ suite "shader validation":
       fragGlsl(
         positionOnlyVertex,
 
-        proc(pos: Vec4): tuple[pixel: Vec4] =
-          result.pixel = pos
+        proc(): tuple[pos: Vec4] =
+          result.pos = vec4(1.0)
       )
     )
 
@@ -871,17 +1062,14 @@ suite "shader validation":
     )
 
   test "rejects conflicting material field types":
-    check not compiles(block:
-      type Material = inferredMaterial(
+    check not compiles(
+      fragGlsl(
         proc(vert: Vertex, strength: float32): tuple[pos: Vec4] =
           result.pos = vert.position.hom,
 
         proc(strength: Vec2): tuple[pixel: Vec4] =
           discard
       )
-
-      var material: Material
-      discard material
     )
 
   test "rejects unsupported object field types":
@@ -891,16 +1079,5 @@ suite "shader validation":
 
         proc(value: InvalidUniform): tuple[pixel: Vec4] =
           discard
-      )
-    )
-
-  test "rejects inferred float64 vector literals":
-    check not compiles(
-      fragGlsl(
-        positionOnlyVertex,
-
-        proc(): tuple[pixel: float32] =
-          let radiance = [1.0, 2.0, 0.5]
-          result.pixel = float32(radiance[0])
       )
     )

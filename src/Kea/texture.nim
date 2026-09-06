@@ -376,37 +376,7 @@ proc size*[F](texture: Texture[F]): array[2, float32] =
   [texture.width.float32, texture.height.float32]
 
 proc sample*(
-  texture: Texture[Rgba8Linear],
-  sample: array[2, float32]
-): array[4, float32] =
-  discard
-
-proc sample*(
-  texture: Texture[Rgba8Srgb],
-  sample: array[2, float32]
-): array[4, float32] =
-  discard
-
-proc sample*(
-  texture: Texture[R32Float],
-  sample: array[2, float32]
-): array[1, float32] =
-  discard
-
-proc sample*(
-  texture: Texture[Rg32Float],
-  sample: array[2, float32]
-): array[2, float32] =
-  discard
-
-proc sample*(
-  texture: Texture[Rgb32Float],
-  sample: array[2, float32]
-): array[3, float32] =
-  discard
-
-proc sample*(
-  texture: Texture[Rgba32Float],
+  texture: Texture,
   sample: array[2, float32]
 ): array[4, float32] =
   discard

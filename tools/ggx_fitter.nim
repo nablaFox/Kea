@@ -11,9 +11,9 @@ type
     alpha: float32
 
 proc sample(ggx: GgxBrdf, wo: Vec3, u: Vec2): Vec3 = 
-  let phi = 2.0'f32 * PI.float32 * u.x
+  let phi = 2.0'f * PI.float32 * u.x
 
-  let radius = ggx.alpha * sqrt(u.y / (1.0'f32 - u.y))
+  let radius = ggx.alpha * sqrt(u.y / (1.0'f - u.y))
 
   let normal = [radius * cos(phi), radius * sin(phi), 1.0].normalize
 
@@ -106,7 +106,7 @@ for viewIndex in 0 ..< N:
 
     inc completed
 
-    let percentage = completed.float32 / Total.float32 * 100.0'f32
+    let percentage = completed.float32 / Total.float32 * 100.0'f
 
     stdout.write &"\r\e[2KCompleted: {completed} / {Total} ({percentage:.2f}%)"
     stdout.flushFile()
