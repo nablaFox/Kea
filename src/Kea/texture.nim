@@ -376,8 +376,8 @@ proc size*[F](texture: Texture[F]): array[2, float32] =
   [texture.width.float32, texture.height.float32]
 
 proc sample*(
-  texture: Texture,
-  sample: array[2, float32]
+  tex: Texture, 
+  uv: array[2, float32]
 ): array[4, float32] =
   discard
 

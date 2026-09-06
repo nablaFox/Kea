@@ -117,6 +117,7 @@ proc glslBuiltinType(typ: NimNode): string =
     (bindSym"float32", "float"),
     (bindSym"float64", "float"),
     (bindSym"int", "int"),
+    (bindSym"uint32", "uint"),
     (bindSym"int32", "int"),
     (bindSym"Vec2", "vec2"),
     (bindSym"Vec3", "vec3"),
@@ -425,11 +426,22 @@ proc helpers(body: NimNode): seq[NimNode] =
 
   collected
 
+proc identifiers(node: NimNode): seq[string] =
+  if node.kind in {nnkIdent, nnkSym}:
+    result.add node.strVal
+
+  for child in node:
+    result.add child.identifiers
+
 proc emitBody(
   body: NimNode,
   isShaderMain = false,
   hasResult = false
 ): string =
+  var
+    usedNames = body.identifiers
+    temporaryIndex = 0
+
   proc emitExpr(
     node: NimNode,
     parentPrecedence = 0,
@@ -573,6 +585,70 @@ proc emitBody(
        (node.precedence == parentPrecedence and isRightOperand):
       result = "(" & result & ")"
 
+  proc freshName(): string =
+    while true:
+      result = "keaTemp" & $temporaryIndex
+      inc temporaryIndex
+
+      if result notin usedNames:
+        usedNames.add result
+        return
+
+  proc needsStatements(node: NimNode): bool =
+    case node.kind
+    of nnkStmtListExpr:
+      for index in 0 ..< node.len - 1:
+        if node[index].kind notin {nnkEmpty, nnkProcDef, nnkFuncDef}:
+          return true
+
+      result = node[^1].needsStatements
+
+    of nnkIfExpr:
+      for branch in node:
+        for child in branch:
+          if child.needsStatements:
+            return true
+
+    else:
+      discard
+
+  proc emitStmt(node: NimNode): string
+
+  proc emitInto(target: string, value: NimNode): string =
+    case value.kind
+    of nnkIfExpr:
+      for index, branch in value:
+        if index > 0:
+          result.add " else "
+
+        case branch.kind
+        of nnkElifExpr, nnkElifBranch:
+          result.add "if (" & branch[0].emitExpr & ") "
+
+        of nnkElseExpr, nnkElse:
+          discard
+
+        else:
+          error "unsupported shader conditional branch", branch
+
+        result.add "{\n"
+        result.add emitInto(target, branch[^1])
+        result.add "}"
+
+      result.add "\n"
+
+    of nnkStmtListExpr:
+      result.add "{\n"
+
+      for index in 0 ..< value.len - 1:
+        result.add value[index].emitStmt
+
+      result.add emitInto(target, value[^1])
+      result.add "}\n"
+
+    else:
+      result = target & " = " & value.emitExpr & ";\n"
+
   proc emitStmt(node: NimNode): string =
     case node.kind
     of nnkStmtList:
@@ -580,42 +656,51 @@ proc emitBody(
         result.add statement.emitStmt
 
     of nnkAsgn:
-      let value = node[1]
+      let
+        target = node[0]
+        value = node[1]
 
-      if value.kind == nnkStmtListExpr:
-        result = "{\n"
+      if not value.needsStatements:
+        result = target.emitExpr & " = " & value.emitExpr & ";\n"
 
-        for index in 0 ..< value.len - 1:
-          result.add value[index].emitStmt
-
-        result.add newTree(
-          nnkAsgn,
-          node[0],
-          value[^1]
-        ).emitStmt
-
-        result.add "}\n"
+      elif target.kind == nnkSym and
+           target.strVal notin value.identifiers:
+        result = emitInto(target.emitExpr, value)
 
       else:
-        result = node[0].emitExpr & " = " & value.emitExpr & ";\n"
+        let temporary = freshName()
+
+        result.add value.getTypeInst.glslType &
+          " " & temporary & ";\n"
 
     of nnkLetSection, nnkVarSection:
       for definition in node:
         let value = definition[^1]
 
-        let initializer =
-          if value.kind == nnkEmpty: ""
-          else: " = " & value.emitExpr
-
         for index in 0 ..< definition.len - 2:
           let
             symbol = definition[index]
             typ = symbol.getTypeInst
+            name = symbol.strVal
 
           if typ.isTextureType:
             error "local texture declarations are not supported", symbol
 
-          result.add typ.glslType & " " & symbol.strVal & initializer & ";\n"
+          if value.needsStatements:
+            let temporary = freshName()
+
+            result.add typ.glslType & " " & temporary & ";\n"
+            result.add emitInto(temporary, value)
+            result.add typ.glslType & " " & name &
+              " = " & temporary & ";\n"
+
+          else:
+            let initializer =
+              if value.kind == nnkEmpty: ""
+              else: " = " & value.emitExpr
+
+            result.add typ.glslType & " " & name &
+              initializer & ";\n"
 
     of nnkInfix, nnkCall, nnkCommand:
       result = node.emitExpr & ";\n"
@@ -655,8 +740,8 @@ proc emitBody(
             error "unsupported shader loop iterator", interval
 
       result = "for (" & variable.getTypeInst.glslType & " " &
-        name & " = " & start & "; " & name & " " & 
-        comparison & " " & finish & "; ++" & 
+        name & " = " & start & "; " & name & " " &
+        comparison & " " & finish & "; ++" &
         name & ") {\n" & node[^1].emitStmt & "}\n"
 
     of nnkReturnStmt:
@@ -666,6 +751,16 @@ proc emitBody(
         result.add value.emitStmt
 
       elif value.kind != nnkEmpty:
+        if value.needsStatements:
+          let temporary = freshName()
+
+          result.add value.getTypeInst.glslType &
+            " " & temporary & ";\n"
+
+          result.add emitInto(temporary, value)
+          result.add "return " & temporary & ";\n"
+          return
+
         return "return " & value.emitExpr & ";\n"
 
       result.add(
@@ -679,7 +774,7 @@ proc emitBody(
 
       result.add ";\n"
 
-    of nnkProcDef, nnkFuncDef:
+    of nnkEmpty, nnkProcDef, nnkFuncDef:
       discard
 
     else:

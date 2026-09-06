@@ -56,9 +56,10 @@ proc update(mcml: var Mcml, photons: Natural) =
     
   for i in 0..<photons:
     let (weight, pos, dir) = block:
-      var weight = 1.0'f
-      var pos = [0.0'f, 0.0, 0.0]
-      var dir = [0.0'f, 0.0, 1.0]
+      var 
+        weight = 1.0'f
+        pos = [0.0'f, 0.0, 0.0]
+        dir = [0.0'f, 0.0, 1.0]
 
       let q = absorption / (absorption + scattering)
 
@@ -88,17 +89,19 @@ proc update(mcml: var Mcml, photons: Natural) =
 
             (1 + g^2 - ((1 - g^2) / (1 - g + 2*g*r))^2) / (2*g)
 
-        let phi = 2 * PI * rand(1.0)
+        let 
+          phi = 2 * PI * rand(1.0)
 
-        let theta = arccos cosTheta.clamp(-1.0'f, 1.0'f)
+          theta = arccos cosTheta.clamp(-1.0'f, 1.0'f)
 
         dir = dir.rotate(theta, phi).normalize
 
       (weight: weight, pos: pos, dir: dir) 
 
     # mappping [-size/2, size/2] x [-size/2, size/2] -> [0, N] x [0, N]
-    let i = int(N.float32 * (pos.x + size / 2) / size)
-    let j = int(N.float32 * (pos.y + size / 2) / size)
+    let 
+      i = int(N.float32 * (pos.x + size / 2) / size)
+      j = int(N.float32 * (pos.y + size / 2) / size)
 
     if i < 0 or i >= N or j < 0 or j >= N:
       continue
@@ -144,12 +147,12 @@ proc render(
     photons: uint32,
     size: float32,
   ): tuple[pixel: Vec4] =
-    proc density(texture: Texture[R32Float], uv: Vec2): float32 =
-      let res = texture.size
+    proc density(tex: Texture[R32Float], uv: Vec2): float32 =
+      let 
+        res = tex.size
+        texelArea = (size / res.x.float32) * (size / res.y.float32)
 
-      let texelArea = (size / res.x.float32) * (size / res.y.float32)
-
-      texture.sample(uv).r / (photons.float32 * texelArea)
+      tex.sample(uv).r / (photons.float32 * texelArea)
 
     let color =
       if objectNormal.x > 0.99:
@@ -167,11 +170,11 @@ proc render(
         tonemap.exponential(color * density)
 
       else:
-        let N = worldNormal.normalize
-        let L = [0.4'f, 0.8, 0.6].normalize
-
-        let ndotl = max(dot(N, L), 0.0)
-        let lighting = 0.35 + 0.65 * ndotl
+        let 
+          N = worldNormal.normalize
+          L = [0.4'f, 0.8, 0.6].normalize
+          ndotl = max(dot(N, L), 0.0)
+          lighting = 0.35 + 0.65 * ndotl
 
         [0.28'f, 0.42, 0.48] * lighting
 
@@ -227,6 +230,8 @@ for frame in kea.frames:
     break
 
   orbit.update(frame)
+
+  mcml.update(photons = 10_000)
 
   frame.backbuffer.clear(color = White * 0.1)
 
