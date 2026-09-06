@@ -44,8 +44,9 @@ proc update*(
   let t = 1.0'f - exp(-12.0'f * delta)
 
   let distance = block:
-    let currDistance = (orbit.camera.positioned - orbit.target).length
-    let smoothDistance = lerp(currDistance, orbit.distance, t)
+    let 
+      currDistance = (orbit.camera.positioned - orbit.target).length
+      smoothDistance = lerp(currDistance, orbit.distance, t)
 
     smoothDistance
 

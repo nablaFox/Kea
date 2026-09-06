@@ -225,7 +225,15 @@ proc precedence(node: NimNode): int =
     7
 
 proc declaration(typ: NimNode, name: string): string =
-  typ.glslType & " " & name & ";\n"
+  let
+    typeName = typ.glslType
+    arrayStart = typeName.find('[')
+
+  if arrayStart >= 0:
+    return typeName[0 ..< arrayStart] & " " & name &
+      typeName[arrayStart .. ^1] & ";\n"
+
+  typeName & " " & name & ";\n"
 
 proc structTypes(roots: openArray[NimNode]): seq[NimNode] =
   var
@@ -341,6 +349,7 @@ proc intrinsicName(symbol: NimNode): string =
     (bindSym"size", "textureSize"),
     (bindSym"abs", "abs"),
     (bindSym"max", "max"),
+    (bindSym"min", "min"),
     (bindSym"cross", "cross"),
     (bindSym"transpose", "transpose"),
   ]:
@@ -609,8 +618,12 @@ proc emitBody(
           if child.needsStatements:
             return true
 
+    of nnkHiddenStdConv, nnkHiddenSubConv,
+       nnkHiddenAddr, nnkHiddenDeref:
+      result = node[^1].needsStatements
+
     else:
-      discard
+      result = false
 
   proc emitStmt(node: NimNode): string
 
@@ -646,6 +659,10 @@ proc emitBody(
       result.add emitInto(target, value[^1])
       result.add "}\n"
 
+    of nnkHiddenStdConv, nnkHiddenSubConv,
+       nnkHiddenAddr, nnkHiddenDeref:
+      result = emitInto(target, value[^1])
+
     else:
       result = target & " = " & value.emitExpr & ";\n"
 
@@ -659,19 +676,12 @@ proc emitBody(
       let
         target = node[0]
         value = node[1]
+        targetCode = target.emitExpr
 
-      if not value.needsStatements:
-        result = target.emitExpr & " = " & value.emitExpr & ";\n"
-
-      elif target.kind == nnkSym and
-           target.strVal notin value.identifiers:
-        result = emitInto(target.emitExpr, value)
-
+      if value.needsStatements:
+        result = emitInto(targetCode, value)
       else:
-        let temporary = freshName()
-
-        result.add value.getTypeInst.glslType &
-          " " & temporary & ";\n"
+        result = targetCode & " = " & value.emitExpr & ";\n"
 
     of nnkLetSection, nnkVarSection:
       for definition in node:

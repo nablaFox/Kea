@@ -99,7 +99,7 @@ proc edgeIntegral(a, b: Vec3): float32 =
   var weight = numerator / denominator
 
   if x <= 0:
-    weight -= 0.5'f * max(1.0'f - x * x, 1e-7'f).invsqrt
+    weight = 0.5'f * max(1.0'f - x * x, 1e-7'f).invsqrt - weight
 
   cross(a, b).z * weight
 

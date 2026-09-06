@@ -1,5 +1,5 @@
 import
-  Kea/[shader, math, mesh, colors],
+  Kea/[shader, math, mesh, colors, texture],
   std/[macros, strutils, unittest]
 
 func normalized(source: string): string =
@@ -128,7 +128,35 @@ suite "shader type generation":
     check "uniform mat3 rotation;" in glsl
     check "uniform mat4 transform;" in glsl
 
-    # TODO: tests for texture and arrays
+  test "maps textures to sampler2D uniforms":
+    let glsl = fragGlsl(
+      positionOnlyVertex,
+
+      proc(texture: Texture[R32Float]): tuple[pixel: Vec4] =
+        discard
+    )
+
+    check "uniform sampler2D texture;" in glsl
+
+  test "declares arrays of scalar uniforms":
+    let glsl = fragGlsl(
+      positionOnlyVertex,
+
+      proc(weights: array[5, float32]): tuple[pixel: Vec4] =
+        discard
+    )
+
+    check "uniform float weights[5];" in glsl
+
+  test "declares arrays of vector uniforms":
+    let glsl = fragGlsl(
+      positionOnlyVertex,
+
+      proc(points: array[8, Vec3]): tuple[pixel: Vec4] =
+        discard
+    )
+
+    check "uniform vec3 points[8];" in glsl
 
   test "declares object types as GLSL structs":
     let glsl = fragGlsl(
@@ -786,6 +814,30 @@ suite "shader body generation":
     check assignmentPosition > declarationPosition
     check outputPosition > assignmentPosition
 
+    test "emits statement expressions directly into assignment targets":
+      let glsl = fragGlsl(
+        positionOnlyVertex,
+
+        proc(value: float32): tuple[pixel: float32] =
+          result.pixel =
+            if value < 0.0:
+              let magnitude = -value
+              magnitude * 2.0
+            else:
+              let doubled = value * 2.0
+              doubled + 1.0
+      )
+
+      check "if (value < 0.0) {" in glsl
+      check "float magnitude = -value;" in glsl
+      check "pixel = magnitude * 2.0;" in glsl
+
+      check "} else {" in glsl
+      check "float doubled = value * 2.0;" in glsl
+      check "pixel = doubled + 1.0;" in glsl
+
+      check "keaTemp" notin glsl
+
 
 suite "shader helper generation":
   test "preserves calls whose return values are discarded":
@@ -952,6 +1004,27 @@ suite "shader helper generation":
     check glsl.count("float shaderWithNestedHelper(") == 1
     check "result = innerDouble(x);" in glsl
     check "pixel = shaderWithNestedHelper(value);" in glsl
+
+  test "emits helper bodies directly into implicit result":
+    proc helperWithEarlyReturn(value: float32): float32 =
+      let doubled = value * 2.0
+
+      if doubled < 0.0:
+        return 0.0
+
+      max(doubled, 1.0)
+
+    let glsl = fragGlsl(
+      positionOnlyVertex,
+
+      proc(value: float32): tuple[pixel: float32] =
+        result.pixel = helperWithEarlyReturn(value)
+    )
+
+    check "float doubled = value * 2.0;" in glsl
+    check "result = 0.0;" in glsl
+    check "result = max(doubled, 1.0);" in glsl
+    check "keaTemp" notin glsl
 
 suite "complete shader generation":
   test "generates position-only vertex shader":

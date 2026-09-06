@@ -28,7 +28,7 @@ discard pbr.add(
   Quad, 
   (
     albedo: [0.32'f, 0.38, 0.43],
-    roughness: 0.5'f, 
+    roughness: 0.15'f, 
     metallic: 0.0'f
   ),
   x = 0, 
