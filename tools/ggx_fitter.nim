@@ -1,4 +1,4 @@
-import std/os, std/strformat, std/math, Kea/[math, ltc], brdf
+import std/os, std/strformat, Kea/[math, ltc], brdf
 
 const
   ProjectRoot = currentSourcePath().parentDir.parentDir

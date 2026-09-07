@@ -1,13 +1,29 @@
-import nimgl/opengl, math, texture
+import core, math, texture
 
 type
-  Program* = distinct GLuint
+  ProgramObj = object
+    kea: Kea
+    handle: GLuint
+
+  Program* = ref ProgramObj
 
   Uniform* = object
     location: GLint
     glType: GLenum
 
-proc new*(vert: string, frag: string): Program =
+proc `=destroy`(program: var ProgramObj) =
+  {.cast(raises: []).}:
+    if program.handle != 0:
+      glDeleteProgram(program.handle)
+      program.handle = 0
+
+    program.kea = nil
+
+proc new*(
+  kea: Kea, 
+  vert: string, 
+  frag: string
+): Program =
   proc compile(kind: GLenum, source: string): GLuint =
     result = glCreateShader(kind)
 
@@ -24,10 +40,11 @@ proc new*(vert: string, frag: string): Program =
       glGetShaderInfoLog(result, 512, nil, log.cstring)
       quit("Shader compilation failed:\n" & log)
 
-  let vertexShader = compile(GL_VERTEX_SHADER, vert)
-  let fragmentShader = compile(GL_FRAGMENT_SHADER, frag)
+  let 
+    vertexShader = compile(GL_VERTEX_SHADER, vert)
+    fragmentShader = compile(GL_FRAGMENT_SHADER, frag)
 
-  let program = glCreateProgram()
+    program = glCreateProgram()
 
   glAttachShader(program, vertexShader)
   glAttachShader(program, fragmentShader)
@@ -44,18 +61,13 @@ proc new*(vert: string, frag: string): Program =
   glDeleteShader(vertexShader)
   glDeleteShader(fragmentShader)
 
-  result = Program(program)
+  result = Program(kea: kea, handle: program)
 
 proc id*(program: Program): GLuint {.inline.} =
-  program.GLuint
+  program.handle
 
 proc use*(program: Program) =
   glUseProgram(program.id)
-
-proc destroy*(program: var Program) =
-  if not program.id == 0:
-    glDeleteProgram(program.id)
-    program = Program(0)
 
 template glTypeOf(T: typedesc): GLenum =
   when T is uint32:
@@ -81,7 +93,7 @@ template checkType(uniform: Uniform, value: typed) =
       doAssert uniform.glType == glTypeOf(typeof(value))
 
 proc uniform*(program: Program, name: string): Uniform =
-  let id = GLuint(program)
+  let id = program.id
 
   result.location = glGetUniformLocation(id, name.cstring)
 

@@ -1,151 +1,184 @@
-import 
-  renderer,
-  mesh,
-  orbit,
-  input,
-  math,
-  window,
-  target,
-  primitives,
-  nimgl/glfw
+import input, nimgl/[glfw, opengl]
 
-const
-  DefaultVertexCapacity {.intdefine: "kea.vertexCapacity".} = 1_000_000
-  DefaultIndexCapacity {.intdefine: "kea.indexCapacity".} = 1_000_000
+export opengl
 
 type
-  Frame* = object
-    delta*: float32
-    fps*: float32
-    time*: float32
-    keyboard*: Keyboard
-    mouse*: Mouse
-    aspect*: float32
-    backbuffer*: BackBufferTarget
-    width*: int32
-    height*: int32
-    present*: proc() {.closure.}
-
   KeaObj = object
-    window: Window
-    storage: MeshStorage
+    handle: GLFWWindow
+
+    width: int32
+    height: int32
+   
+    mouse: Mouse
+    keyboard: Keyboard
+
+    cursorMode: CursorMode
 
   Kea* = ref KeaObj
 
 proc `=destroy`(kea: var KeaObj) =
   {.cast(raises: []).}:
-    if kea.storage != nil:
-      kea.storage.destroy()
-      kea.storage = nil
+    if kea.handle != nil:
+      kea.handle.destroyWindow()
+      kea.handle = nil
 
     glfwTerminate()
+
+proc `cursor=`*(kea: Kea, cursor: CursorMode) =
+  kea.cursorMode = cursor
+  kea.handle.setInputMode(GLFWCursorSpecial, cursor.glfwCursorMode)
+
+proc cursor*(kea: Kea): CursorMode =
+  kea.cursorMode
+
+proc rebaseMouse(kea: Kea) =
+  var x, y: float64
+  kea.handle.getCursorPos(addr x, addr y)
+
+  kea.mouse.position = [x.float32, y.float32]
+  kea.mouse.delta = [0.0'f, 0.0]
 
 proc init*(
   width: Natural,
   height: Natural,
   title: string,
-  vertexCapacity: Natural = DefaultVertexCapacity,
-  indexCapacity: Natural = DefaultIndexCapacity,
   resizable = false,
   decorated = false,
   cursor = Normal,
+  samples: Natural = 8
 ): Kea =
-  let window = window.new(
-    width,
-    height,
-    title,
-    resizable,
-    decorated,
-    cursor
-  )
+  when not defined(release):
+    discard glfwSetErrorCallback(
+      proc(error: int32, description: cstring) {.cdecl.} =
+        echo "GLFW error ", error, ": ", description
+    )
 
-  let storage = initMeshStorage(vertexCapacity, indexCapacity)
+  doAssert glfwInit(), "Failed to initialize GLFW"
 
   result = Kea(
-    window: window,
-    storage: storage
-  ) 
-
-proc mesh*(
-  kea: Kea,
-  vertices: openArray[Vertex],
-  indices: openArray[Index],
-): Mesh =
-  mesh.new(kea.storage, vertices, indices)
-
-template renderer*[G: tuple](
-  kea: Kea,
-  vert, frag: typed,
-  globals: G = (),
-): untyped =
-  renderer.new(
-    kea.storage,
-    vert,
-    frag,
-    globals
+    width: width.int32,
+    height: height.int32,
   )
 
-proc renderable*(
-  kea: Kea,
-  primitive: Primitive,
-  x: float32 = 0.0,
-  y: float32 = 0.0,
-  z: float32 = 0.0,
-  yaw: float32 = 0.0,
-  pitch: float32 = 0.0,
-  roll: float32 = 0.0,
-  scale: Vec3 = vec3(1.0)
-): Renderable {.error: "not implemented;".} = discard
+  glfwWindowHint(GLFWContextVersionMajor, 4)
+  glfwWindowHint(GLFWContextVersionMinor, 0)
+  glfwWindowHint(GLFWOpenglProfile, GLFWOpenglCoreProfile)
+  glfwWindowHint(GLFWSamples, samples.int32)
 
-template render*[T: tuple](
-  kea: Kea,
-  renderable: Renderable,
-  vert, frag: typed,
-  params: T = (),
-  topology = Triangles  
-) =
-  {.error: "not implemented".}
-
-proc `cursor=`*(kea: Kea, cursor: CursorMode) =
-  kea.window.setCursorMode(cursor)
-
-proc cursor*(kea: Kea): CursorMode =
-  kea.window.cursorMode
-
-proc update*(orbit: var OrbitController, frame: Frame) =
-  orbit.update(
-    delta = frame.delta,
-    mouse = frame.mouse, 
-    keyboard = frame.keyboard, 
+  glfwWindowHint(
+    GLFWDecorated,
+    if decorated: GLFWTrue else: GLFWFalse
   )
 
-iterator frames*(kea: Kea): Frame =
-  let startTime = glfwGetTime()
-  var previousTime = startTime
+  if not resizable:
+    glfwWindowHint(GLFWResizable, GLFWFalse)
 
-  while not kea.window.shouldClose:
-    let currentTime = glfwGetTime()
+  let handle = glfwCreateWindow(
+    width.int32,
+    height.int32,
+    title
+  )
 
-    let delta = (currentTime - previousTime).float32
-    let time = (currentTime - startTime).float32
-    let fps = if delta > 0.0: 1.0 / delta else: 0.0
+  result.handle = handle
 
-    kea.window.poll()
+  doAssert handle != nil, "Failed to create GLFW window"
 
-    let keyboard = kea.window.keyboard
-    let mouse = kea.window.mouse
+  handle.makeContextCurrent()
 
-    previousTime = currentTime
+  doAssert glInit(), "Failed to initialize OpenGL"
 
-    yield Frame(
-      delta: delta,
-      fps: fps,
-      time: time,
-      keyboard: keyboard,
-      mouse: mouse,
-      aspect: kea.window.aspect,
-      backbuffer: kea.window.backbuffer,
-      width: kea.window.width,
-      height: kea.window.height,
-      present: proc() = kea.window.present()
-    )
+  if glfwExtensionSupported("GL_ARB_bindless_texture") != GLFWTrue:
+    quit("GL_ARB_bindless_texture is not supported")
+
+  loadGL_ARB_bindless_texture()
+
+  if samples > 0:
+    glEnable(GL_MULTISAMPLE)
+
+  result.rebaseMouse()
+
+  handle.setWindowUserPointer(cast[pointer](result))
+
+  result.cursor = cursor
+
+  discard handle.setWindowSizeCallback(
+    proc(
+      handle: GLFWWindow,
+      width, height: int32
+    ) {.cdecl.} =
+      let kea =
+        cast[Kea](handle.getWindowUserPointer())
+
+      kea.width = width
+      kea.height = height
+      kea.rebaseMouse()
+  )
+
+  discard handle.setScrollCallback(
+    proc(
+      handle: GLFWWindow,
+      xOffset, yOffset: float64
+    ) {.cdecl.} =
+      let kea =
+        cast[Kea](handle.getWindowUserPointer())
+
+      kea.mouse.scroll = [
+        xOffset.float32,
+        yOffset.float32
+      ]
+  )
+
+  discard handle.setWindowPosCallback(
+    proc(
+      handle: GLFWWindow,
+      x, y: int32
+    ) {.cdecl.} =
+      let kea =
+        cast[Kea](handle.getWindowUserPointer())
+
+      kea.rebaseMouse()
+  )
+
+proc shouldClose*(kea: Kea): bool =
+  kea.handle.windowShouldClose
+
+proc present*(kea: Kea) =
+  kea.handle.swapBuffers()
+
+proc close*(kea: Kea) =
+  kea.handle.setWindowShouldClose(true)
+
+proc poll*(kea: Kea) =
+  kea.mouse.beginFrame()
+  kea.keyboard.beginFrame()
+
+  glfwPollEvents()
+
+  kea.mouse.update(kea.handle)
+  kea.keyboard.update(kea.handle)
+
+proc width*(kea: Kea): int32 =
+  kea.width
+
+proc height*(kea: Kea): int32 =
+  kea.height
+
+proc mouse*(kea: Kea): Mouse =
+  kea.mouse
+
+proc keyboard*(kea: Kea): Keyboard =
+  kea.keyboard
+
+proc framebufferSize*(kea: Kea): tuple[width, height: int32] =
+  kea.handle.getFramebufferSize(
+    addr result.width,
+    addr result.height
+  )
+
+proc aspect*(kea: Kea): float32 =
+  let (width, height) = kea.framebufferSize
+
+  if height == 0:
+    return 1.0'f
+
+  width.float32 / height.float32

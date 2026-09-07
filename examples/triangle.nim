@@ -4,24 +4,29 @@
 
 import Kea
 
-let kea = init(
-  width = 800, 
-  height = 600, 
-  title = "triangle"
-)
+let
+  kea = init(
+    width = 800, 
+    height = 600, 
+    title = "triangle"
+  )
 
-let renderer = kea.renderer(
-  vert = proc(vert: Vertex): tuple[pos: Vec4] = 
-    result.pos = vert.position.hom,
+  renderer = renderer.new(
+    kea,
 
-  frag = proc(color: Color): tuple[pixel: Vec4] =
-    result.pixel = color.hom  
-)
+    vert = proc(vert: Vertex): tuple[pos: Vec4] = 
+      result.pos = vert.position.hom,
 
-let triangle = renderer.add(
-  Triangle, 
-  material = (color: colors.Blue)
-)
+    frag = proc(color: Color): tuple[pixel: Vec4] =
+      result.pixel = color.hom  
+  )
+
+  allocator = allocator.new(kea)
+
+  triangle = renderer.add(
+    allocator.mesh(Triangle), 
+    material = (color: colors.Blue)
+  )
 
 for frame in kea.frames:
   if frame.keyboard.pressed(Escape):

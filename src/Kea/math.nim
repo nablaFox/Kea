@@ -1,5 +1,7 @@
 import std/math
 
+export math
+
 type 
   Vec*[C: static int] = array[C, float32]
   Matrix*[R, C: static int] = array[R, Vec[C]]

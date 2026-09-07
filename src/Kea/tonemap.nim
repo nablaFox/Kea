@@ -1,4 +1,4 @@
-import colors, std/math
+import colors, math
 
 proc reinhard*(color: Color): Color =
   for i in 0..<3:

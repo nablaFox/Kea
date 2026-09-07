@@ -1,11 +1,25 @@
 import Kea
 
-let kea = init(
-  width = 800, 
-  height = 600, 
-  cursor = Disabled,
-  title = "pbr"
-)
+let
+  kea = init(
+    title = "pbr",
+    width = 800, 
+    height = 600, 
+    cursor = Disabled
+  )
+
+  allocator = allocator.new(kea)
+
+  pbr = pbr.new(
+    kea,
+    light = RectLight(
+      position: [0.0'f, 10.0, 0.0],
+      radiance: [10.0'f, 8.0'f, 6.0'f],
+      rotation: (PI/2).pitch,
+      width: 8.0'f,
+      height: 8.0'f
+    )
+  )
 
 var orbit = orbit.new(
   camera.new(Perspective),
@@ -14,30 +28,19 @@ var orbit = orbit.new(
   pitch = -PI / 8
 )
 
-let pbr = kea.pbr(
-  light = RectLight(
-    position: [0.0'f, 10.0, 0.0],
-    radiance: [10.0'f, 8.0'f, 6.0'f],
-    rotation: (PI/2).pitch,
-    width: 8.0'f,
-    height: 8.0'f
-  )
-)
-
 discard pbr.add(
-  Quad, 
+  allocator.mesh(Quad), 
   (
     albedo: [0.32'f, 0.38, 0.43],
     roughness: 0.15'f, 
     metallic: 0.0'f
   ),
-  x = 0, 
   y = -1.0, 
   scale = [10'f, 10, 10], 
   pitch = -PI / 2.0
 )
 
-discard pbr.add(Sphere)
+discard pbr.add allocator.mesh(Sphere)
 
 for frame in kea.frames:
   if frame.keyboard.pressed(Escape):

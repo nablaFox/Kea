@@ -1,4 +1,4 @@
-import std/math, transform, math
+import transform, math
 
 const WorldOrigin*: Vec3 = [0.0, 0.0, 0.0]
 const WorldBackward*: Vec3 = [0.0, 0.0, 1.0]

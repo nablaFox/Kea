@@ -4,11 +4,10 @@ import
   shader, 
   transform, 
   math, 
-  primitives, 
   target,
   texture,
-  std/[typetraits, macros],
-  nimgl/opengl
+  core,
+  std/[typetraits, macros]
 
 type
   Renderable* = ref object
@@ -25,9 +24,10 @@ type
     M: tuple;
     A: tuple;
   ] = object
+    kea: Kea
+
     program: Program
     items: seq[RenderItem[M]]
-    storage: MeshStorage
 
     globalUniforms: seq[Uniform]
     materialUniforms: seq[Uniform]
@@ -65,21 +65,28 @@ template `.=`*[G, M, A](r: Renderer[G, M, A], field: untyped, value: untyped) =
 
 proc `=destroy`[G, M, A](r: var RendererObj[G, M, A]) =
   {.cast(raises: []).}:
-    r.program.destroy()
+    r.program = nil
     r.items = @[]
     r.globalUniforms = @[]
     r.materialUniforms = @[]
-    r.storage = nil
+    reset r.globals
+    r.kea = nil
 
 proc newFromSources[G: tuple; M: tuple; A: tuple](
-  storage: MeshStorage,
+  kea: Kea,
   vertexSource: string,
   fragmentSource: string,
   globals: G
 ): Renderer[G, M, A] =
   new(result)
 
-  result.program = program.new(vertexSource, fragmentSource)
+  result.kea = kea
+
+  result.program = program.new(
+    kea,
+    vertexSource, 
+    fragmentSource
+  )
 
   result.globalUniforms = result.program.uniforms[:G]
   result.materialUniforms = result.program.uniforms[:M]
@@ -88,10 +95,9 @@ proc newFromSources[G: tuple; M: tuple; A: tuple](
   result.nmatUniform = result.program.uniform("nmat")
 
   result.globals = globals
-  result.storage = storage
 
 macro new*[G: tuple](
-  storage: MeshStorage,
+  kea: Kea,
   vert, frag: typed,
   globals: G = ()
 ): untyped =
@@ -103,7 +109,7 @@ macro new*[G: tuple](
 
   result = quote do:
     newFromSources[typeof(`globals`), `M`, `A`](
-      `storage`,
+      `kea`,
       `vs`,
       `fs`,
       `globals`
@@ -126,6 +132,17 @@ template compatible(Output, Attachment: typedesc): bool =
 
   else:
     false
+
+proc checkAttachments(
+  Outputs, Attachments: typedesc,
+  index: static int = 0
+) {.compileTime.} =
+  when index < Outputs.tupleLen:
+    when not compatible(get(Outputs, index), get(Attachments, index)):
+      {.error: "Fragment output at location " & $index &
+        " is incompatible with its target attachment".}
+
+    checkAttachments(Outputs, Attachments, index + 1)
 
 proc render*[
   G, M, A: tuple;
@@ -154,13 +171,8 @@ proc render*[
       {.error: "Fragment output count does not match target attachment count".}
 
     else:
-      for name, output, attachment in fieldPairs(
-        A.default,
-        Atts.default
-      ):
-        when not compatible(typeof(output), typeof(attachment)):
-          {.error: "Fragment output '" & name &
-            "' is incompatible with its target attachment".}
+      static:
+        checkAttachments(A, Atts)
  
   target.use()
 
@@ -226,7 +238,6 @@ proc add*[G, M, A](
   topology = Triangles,
 ): RenderItem[M] =
   doAssert mesh != nil, "Cannot add a nil mesh"
-  doAssert mesh.storage != nil, "Mesh has no storage"
 
   let renderable = Renderable(
     mesh: mesh,
@@ -256,48 +267,6 @@ proc add*[G, M, A](
 ): RenderItem[M] =
   renderer.add(
     mesh,
-    material,
-    transform.new(
-      x = x,
-      y = y,
-      z = z,
-      pitch = pitch,
-      yaw = yaw,
-      roll = roll,
-      scale = scale
-    ),
-    topology,
-  )
-
-proc add*[G, M, A](
-    renderer: Renderer[G, M, A],
-    primitive: Primitive,
-    material: M = M.default,
-    transform: Transform,
-    topology = Triangles,
-): RenderItem[M] =
-  renderer.add(
-    primitive.mesh(renderer.storage),
-    material,
-    transform, 
-    topology,
-  )
-
-proc add*[G, M, A](
-  renderer: Renderer[G, M, A],
-  primitive: Primitive,
-  material: M = M.default,
-  x: float32 = 0.0,
-  y: float32 = 0.0,
-  z: float32 = 0.0,
-  yaw: float32 = 0.0,
-  pitch: float32 = 0.0,
-  roll: float32 = 0.0,
-  scale: Vec3 = vec3(1.0),
-  topology = Triangles,
-): RenderItem[M] =
-  renderer.add(
-    primitive.mesh(renderer.storage),
     material,
     transform.new(
       x = x,

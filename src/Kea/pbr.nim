@@ -8,8 +8,7 @@ import
   camera,
   target,
   colors,
-  core,
-  std/math
+  core
 
 type 
   RectLight* = object
@@ -220,12 +219,13 @@ proc frag*(
     .gamma
     .hom
 
-proc pbr*(
+proc new*(
   kea: Kea,
   light: RectLight
 ): PBRRenderer = 
   let 
     ltcInverseMatrixLut = texture.new(
+      kea,
       ltc.InverseMatrixData,
       ltc.LutSize,
       ltc.LutSize,
@@ -234,6 +234,7 @@ proc pbr*(
     )
 
     ltcMagnitudeFresnelLut = texture.new(
+      kea,
       ltc.MagnitudeFresnelData,
       ltc.LutSize,
       ltc.LutSize,
@@ -241,7 +242,8 @@ proc pbr*(
       LinearTextureOptions
     )
 
-  result = kea.renderer(
+  renderer.new(
+    kea,
     vert = vert,
     frag = frag, 
     globals = (
@@ -253,10 +255,6 @@ proc pbr*(
       ltcMagnitudeFresnelLut: ltcMagnitudeFresnelLut
     )
   )
-
-  result.ltcInverseMatrixLut = ltcInverseMatrixLut
-
-  result.ltcMagnitudeFresnelLut = ltcMagnitudeFresnelLut
 
 proc render*(pbr: PBRRenderer, target: RenderTarget, camera: Camera) =
   pbr.eye = camera.positioned

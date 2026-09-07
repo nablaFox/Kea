@@ -1,4 +1,4 @@
-import std/math, mesh
+import math, mesh, allocator
 
 const SpherePrecision* {.intdefine: "kea.spherePrecision".} = 64
 
@@ -147,16 +147,16 @@ const CubeMesh* = Geometry(
   ],
 )
 
-proc mesh*(primitive: Primitive, storage: MeshStorage): Mesh =
+proc mesh*(allocator: MeshAllocator, primitive: Primitive): Mesh =
   case primitive
   of Triangle:
-    result = mesh.new(storage, TriangleMesh.vertices, TriangleMesh.indices)
+    result = mesh.new(allocator, TriangleMesh.vertices, TriangleMesh.indices)
 
   of Quad:
-    result = mesh.new(storage, QuadMesh.vertices, QuadMesh.indices)
+    result = mesh.new(allocator, QuadMesh.vertices, QuadMesh.indices)
 
   of Sphere:
-    result = mesh.new(storage, SphereMesh.vertices, SphereMesh.indices)
+    result = mesh.new(allocator, SphereMesh.vertices, SphereMesh.indices)
 
   of Cube:
-    result = mesh.new(storage, CubeMesh.vertices, CubeMesh.indices)
+    result = mesh.new(allocator, CubeMesh.vertices, CubeMesh.indices)

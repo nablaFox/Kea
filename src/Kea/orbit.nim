@@ -1,4 +1,4 @@
-import std/math, math, input, camera
+import math, input, camera, frame
 
 type OrbitController* = object
   camera*: Camera
@@ -73,3 +73,10 @@ proc update*(
   orbit.camera.position = orbit.target + (rotation * WorldBackward) * distance
 
   orbit.camera.rotation = rotation
+
+proc update*(orbit: var OrbitController, frame: Frame) =
+  orbit.update(
+    delta = frame.delta,
+    mouse = frame.mouse, 
+    keyboard = frame.keyboard
+  )

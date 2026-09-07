@@ -1,4 +1,4 @@
-import math, std/math
+import math
 
 type Color* = Vec3
 

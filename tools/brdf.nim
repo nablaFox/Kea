@@ -1,4 +1,4 @@
-import Kea/math, std/math, optimizer
+import Kea/math, optimizer
 
 type
   Brdf* = concept brdf

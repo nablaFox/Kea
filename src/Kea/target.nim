@@ -1,4 +1,4 @@
-import nimgl/opengl, std/typetraits, texture, colors
+import std/typetraits, core, texture, colors
 
 type
   RenderTargetKind* = enum
@@ -11,37 +11,23 @@ type
     K: static RenderTargetKind;
     A: tuple;
   ] = object
+    kea: Kea
+
     framebuffer: GLuint
 
     width, height: int32
 
     when K in {ColorOnly, ColorDepth}:
-      attachments*: A
+      attachments: A
 
     when K in {DepthOnly, ColorDepth}:
-      depth*: Texture[Depth24]
+      depth: Texture[Depth24]
 
   RenderTarget*[
     K: static RenderTargetKind;
     A: tuple;
   ] =
     ref RenderTargetObj[K, A]
-
-  ColorAtt* = tuple[
-    color: Texture[Rgba8Linear]
-  ]
-
-  BackBufferTarget* =
-    RenderTarget[BackBuffer, tuple[]]
-
-  ColorTarget*[A = ColorAtt] =
-    RenderTarget[ColorOnly, A]
-
-  ColorDepthTarget*[A = ColorAtt] =
-    RenderTarget[ColorDepth, A]
-
-  DepthTarget* =
-    RenderTarget[DepthOnly, tuple[]]
 
 proc `=destroy`[
   K: static RenderTargetKind;
@@ -59,6 +45,25 @@ proc `=destroy`[
 
     when K in {DepthOnly, ColorDepth}:
       target.depth = nil
+
+    target.kea = nil
+
+type
+  ColorAtt* = tuple[
+    color: Texture[Rgba8Linear]
+  ]
+
+  BackBufferTarget* =
+    RenderTarget[BackBuffer, tuple[]]
+
+  ColorTarget*[A = ColorAtt] =
+    RenderTarget[ColorOnly, A]
+
+  ColorDepthTarget*[A = ColorAtt] =
+    RenderTarget[ColorDepth, A]
+
+  DepthTarget* =
+    RenderTarget[DepthOnly, tuple[]]
 
 template checkColorAttachment[F: static TextureFormat](
   attachment: Texture[F]
@@ -162,21 +167,12 @@ proc initializeFramebuffer[
   doAssert status == GL_FRAMEBUFFER_COMPLETE,
     "Framebuffer is incomplete: " & $(status.uint32)
 
-proc new*(width, height: int32): BackBufferTarget =
-  doAssert width >= 0
-  doAssert height >= 0
-
-  system.new(result)
-
-  result.framebuffer = 0
-  result.width = width
-  result.height = height
-
-proc new*[A: tuple](attachments: A): ColorTarget[A] =
+proc new*[A: tuple](kea: Kea, attachments: A): ColorTarget[A] =
   let size = attachments.checkedSize
 
   system.new(result)
 
+  result.kea = kea
   result.width = size.width.int32
   result.height = size.height.int32
   result.attachments = attachments
@@ -184,15 +180,17 @@ proc new*[A: tuple](attachments: A): ColorTarget[A] =
   initializeFramebuffer[ColorOnly, A](result)
 
 proc new*[F: static TextureFormat](
+  kea: Kea,
   attachment: Texture[F]
 ): ColorTarget[tuple[color: Texture[F]]] =
-  new((color: attachment))
+  new(kea, (color: attachment))
 
-proc new*(depth: Texture[Depth24]): DepthTarget =
+proc new*(kea: Kea, depth: Texture[Depth24]): DepthTarget =
   doAssert depth != nil
 
   system.new(result)
 
+  result.kea = kea
   result.width = depth.width.int32
   result.height = depth.height.int32
   result.depth = depth
@@ -200,6 +198,7 @@ proc new*(depth: Texture[Depth24]): DepthTarget =
   initializeFramebuffer[DepthOnly, tuple[]](result)
 
 proc new*[A: tuple](
+  kea: Kea,
   attachments: A,
   depth: Texture[Depth24],
 ): ColorDepthTarget[A] =
@@ -215,6 +214,7 @@ proc new*[A: tuple](
 
   system.new(result)
 
+  result.kea = kea
   result.width = size.width.int32
   result.height = size.height.int32
   result.attachments = attachments
@@ -223,27 +223,30 @@ proc new*[A: tuple](
   initializeFramebuffer[ColorDepth, A](result)
 
 proc new*[F: static TextureFormat](
+  kea: Kea,
   attachment: Texture[F],
   depth: Texture[Depth24]
 ): ColorDepthTarget[tuple[color: Texture[F]]] =
-  new((color: attachment), depth)
+  new(kea, (color: attachment), depth)
 
-proc resize*(
-  target: BackBufferTarget,
-  width, height: int32
+proc backbuffer*(kea: Kea): BackBufferTarget =
+  BackBufferTarget(kea: kea, framebuffer: 0)
+
+proc size*[K: static RenderTargetKind; A: tuple](
+  target: RenderTarget[K, A]
+): tuple[width, height: int32] =
+  when K == BackBuffer:
+    target.kea.framebufferSize
+  else:
+    (target.width, target.height)
+
+proc use*[K: static RenderTargetKind; A: tuple](
+  target: RenderTarget[K, A]
 ) =
-  doAssert width >= 0
-  doAssert height >= 0
+  let (width, height) = target.size
 
-  target.width = width
-  target.height = height
-
-proc use*[
-  K: static RenderTargetKind;
-  A: tuple;
-](target: RenderTarget[K, A]) =
   glBindFramebuffer(GL_FRAMEBUFFER, target.framebuffer)
-  glViewport(0, 0, target.width, target.height)
+  glViewport(0, 0, width, height)
 
 proc clear*[
   K: static RenderTargetKind;
@@ -264,33 +267,40 @@ proc clear*[
       GL_DEPTH_BUFFER_BIT
     )
 
-  elif K is ColorOnly:
+  elif K == ColorOnly:
     glClearColor(color.r, color.g, color.b, 1.0'f)
     glClear(GL_COLOR_BUFFER_BIT)
 
-  elif K is DepthOnly:
+  elif K == DepthOnly:
     glClearDepth(depth.GLdouble)
     glClear(GL_DEPTH_BUFFER_BIT)
 
-proc aspect*[
-  K: static RenderTargetKind;
-  A: tuple;
-](target: RenderTarget[K, A]): float32 =
-  if target.height == 0:
+proc aspect*[K: static RenderTargetKind; A: tuple](
+  target: RenderTarget[K, A]
+): float32 =
+  let (width, height) = target.size
+
+  if height == 0:
     return 1.0'f
 
-  return target.width.float32 / target.height.float32
+  width.float32 / height.float32
 
-template attachment*[A: tuple](
+proc attachments*[A: tuple](target: ColorTarget[A]): A =
+  target.attachments
+
+proc attachments*[A: tuple](target: ColorDepthTarget[A]): A =
+  target.attachments
+
+proc attachment*[A: tuple](
   target: ColorTarget[A],
   index: static int
-): untyped =
+): auto =
   target.attachments[index]
 
-template attachment*[A: tuple](
+proc attachment*[A: tuple](
   target: ColorDepthTarget[A],
   index: static int
-): untyped =
+): auto =
   target.attachments[index]
 
 proc depth*(target: DepthTarget): Texture[Depth24] =

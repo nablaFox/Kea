@@ -1,6 +1,7 @@
 import 
   Kea/[
     core, 
+    frame,
     pbr,
     renderer, 
     math, 
@@ -13,16 +14,16 @@ import
     colors,
     orbit,
     texture,
+    allocator,
     tonemap
-  ], 
-  std/math as stdmath
+  ]
 
 export 
   target,
   core, 
+  frame,
   renderer, 
   math, 
-  stdmath,
   primitives, 
   transform, 
   camera, 
@@ -32,4 +33,5 @@ export
   colors,
   orbit,
   texture,
-  tonemap
+  tonemap,
+  allocator

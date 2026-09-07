@@ -1,4 +1,4 @@
-import nimgl/opengl
+import core
 
 type
   TextureOptions* = object
@@ -32,6 +32,8 @@ type
     when F in {Rgba8Linear, R32Float, Rg32Float, Rgba32Float}:
       imageHandle: GLuint64
 
+    kea: Kea
+
   Texture*[F: static TextureFormat] =
     ref TextureObj[F]
 
@@ -64,6 +66,8 @@ proc `=destroy`[F: static TextureFormat](texture: var TextureObj[F]) =
     if texture.id != 0:
       glDeleteTextures(1, addr texture.id)
       texture.id = 0
+
+    texture.kea = nil
 
 proc GLenum(format: TextureFormat): GLenum =
   case format
@@ -163,6 +167,7 @@ proc info(format: TextureFormat): TextureInfo =
     )
 
 proc createTexture[F: static TextureFormat](
+  kea: Kea,
   data: pointer,
   width, height: Natural,
   info: TextureInfo,
@@ -173,6 +178,7 @@ proc createTexture[F: static TextureFormat](
 
   system.new(result)
 
+  result.kea = kea
   result.width = width.int
   result.height = height.int
 
@@ -232,12 +238,14 @@ proc createTexture[F: static TextureFormat](
   )
 
 template new*(
+  kea: Kea,
   data: pointer,
   width, height: Natural,
   format: static TextureFormat,
   options: TextureOptions,
 ): untyped =
   createTexture[format](
+    kea,
     data,
     width,
     height,
@@ -246,12 +254,14 @@ template new*(
   )
 
 proc new*(
+  kea: Kea,
   data: string,
   width, height: Natural,
   format: static TextureFormat,
   options: TextureOptions,
 ): Texture[format] =
   doAssert data.len > 0
+
   const bytesPerComponent =
     if format in {Rgba8Linear, Rgba8Srgb}: 1 
     else: 4
@@ -260,6 +270,7 @@ proc new*(
     "Texture data size does not match texture dimensions"
 
   result = createTexture[format](
+    kea,
     addr data[0],
     width,
     height,
@@ -268,6 +279,7 @@ proc new*(
   )
 
 proc new*(
+  kea: Kea,
   data: openArray[float32],
   width, height: Natural,
   format: static TextureFormat,
@@ -280,14 +292,23 @@ proc new*(
   doAssert data.len == width * height * format.components,
     "Texture data size does not match texture dimensions"
 
-  createTexture[format](addr data[0], width, height, format.info, options)
+  createTexture[format](
+    kea,
+    addr data[0], 
+    width, 
+    height, 
+    format.info, 
+    options
+  )
 
 template new*(
+  kea: Kea,
   width, height: Natural,
   format: untyped,
   options: TextureOptions,
 ): untyped =
   createTexture[format](
+    kea,
     nil,
     width,
     height,
