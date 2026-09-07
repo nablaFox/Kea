@@ -10,15 +10,14 @@ let
 
   allocator = allocator.new(kea)
 
-  pbr = pbr.new(
-    kea,
-    light = RectLight(
-      position: [0.0'f, 10.0, 0.0],
-      radiance: [10.0'f, 8.0'f, 6.0'f],
-      rotation: (PI/2).pitch,
-      width: 8.0'f,
-      height: 8.0'f
-    )
+  pbr = pbr.new(kea)
+
+  light = RectLight(
+    position: [0.0'f, 10.0, 0.0],
+    radiance: [10.0'f, 8.0'f, 6.0'f],
+    rotation: (PI/2).pitch,
+    width: 8.0'f,
+    height: 8.0'f
   )
 
 var orbit = orbit.new(
@@ -29,6 +28,7 @@ var orbit = orbit.new(
 )
 
 discard pbr.add(
+  "floor",
   allocator.mesh(Quad), 
   (
     albedo: [0.32'f, 0.38, 0.43],
@@ -40,7 +40,10 @@ discard pbr.add(
   pitch = -PI / 2.0
 )
 
-discard pbr.add allocator.mesh(Sphere)
+discard pbr.add(
+  "sphere",
+  allocator.mesh(Sphere)
+)
 
 for frame in kea.frames:
   if frame.keyboard.pressed(Escape):
@@ -50,6 +53,10 @@ for frame in kea.frames:
 
   frame.backbuffer.clear()
 
-  pbr.render(frame.backbuffer, orbit.camera)
+  pbr.render(
+    frame.backbuffer, 
+    orbit.camera, 
+    light
+  )
 
   frame.present()

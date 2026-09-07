@@ -6,9 +6,9 @@ import Kea
 
 let
   kea = init(
+    title = "triangle",
     width = 800, 
     height = 600, 
-    title = "triangle"
   )
 
   renderer = renderer.new(
@@ -23,9 +23,9 @@ let
 
   allocator = allocator.new(kea)
 
-  triangle = renderer.add(
-    allocator.mesh(Triangle), 
-    material = (color: colors.Blue)
+  triangle = item.new(
+    allocator.mesh(Triangle),
+    material = (color: Blue)
   )
 
 for frame in kea.frames:
@@ -40,6 +40,6 @@ for frame in kea.frames:
 
   frame.backbuffer.clear()
 
-  renderer.render(frame.backbuffer)
+  renderer.render(frame.backbuffer, triangle)
 
   frame.present()

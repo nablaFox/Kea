@@ -102,7 +102,7 @@ proc update(mcml: var Mcml, photons: Natural) =
 proc render(
   mcml: Mcml, 
   res: Resources,
-  backbuffer: BackBufferTarget, 
+  target: RenderTarget,
   camera: Camera,
   x: float32 = 0.0,
   y: float32 = 0.0,
@@ -173,6 +173,15 @@ proc render(
     result.pixel = color.gamma.hom
 
   let
+    globals = (
+      view: camera.view,
+      proj: camera.proj target.aspect,
+      transmittance: transmittance,
+      diffuse: diffuse,
+      photons: mcml.photons,
+      size: mcml.size
+    )
+
     transmittance = res.texture(
       "mcml/transmittance",
       data = mcml.transmittance,
@@ -195,30 +204,28 @@ proc render(
       "mcml/renderer",
       vert = vert,
       frag = frag,
-      globals = (
-        view: camera.view,
-        proj: camera.proj(backbuffer.aspect),
-        transmittance: transmittance,
-        diffuse: diffuse,
-        photons: mcml.photons,
-        size: mcml.size
-      )
+      globals = typeof(globals)
+    )
+
+    slab = item.new(
+      res.mesh(Cube),
+      x = x,
+      y = y,
+      z = z,
+      yaw = yaw,
+      pitch = pitch,
+      roll = roll,
+      scale = [
+        mcml.depth, 
+        mcml.size, 
+        mcml.size
+      ] * 0.5'f
     )
 
   renderer.render(
-    target = backbuffer,
-    mesh = res.mesh(Cube),
-    x = x,
-    y = y,
-    z = z,
-    yaw = yaw,
-    pitch = pitch,
-    roll = roll,
-    scale = [
-      mcml.depth, 
-      mcml.size, 
-      mcml.size
-    ] * 0.5'f
+    target = target,
+    item = slab,
+    globals = globals
   )
 
 let 

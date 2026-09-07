@@ -238,10 +238,10 @@ proc texture*(
   if data != nil:
     result.update(data)
 
-macro renderer*[G: tuple](
+macro renderer*(
   res: Resources,
   vert, frag: typed,
-  globals: G = ()
+  globals: typedesc[tuple] = tuple[]
 ): untyped =
   result = quote do:
     renderer.new(
@@ -251,11 +251,11 @@ macro renderer*[G: tuple](
       `globals`,
     )
 
-macro renderer*[G: tuple](
+macro renderer*(
   res: Resources,
   key: string,
   vert, frag: typed,
-  globals: G = ()
+  globals: typedesc[tuple] = tuple[]
 ): untyped =
   result = quote do:
     block:
@@ -270,5 +270,4 @@ macro renderer*[G: tuple](
         )
       )
 
-      r.globals = `globals`
       r

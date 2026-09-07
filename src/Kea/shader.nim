@@ -108,8 +108,10 @@ proc localTypes(body: NimNode): seq[NimNode] =
   types
 
 proc isTextureType(typ: NimNode): bool =
+  let typ = typ.getTypeInst
+
   typ.kind == nnkBracketExpr and
-  typ[0].eqIdent(bindSym"Texture")
+  typ[0].eqIdent("Texture")
 
 proc glslBuiltinType(typ: NimNode): string =
   for (nimType, glslName) in [

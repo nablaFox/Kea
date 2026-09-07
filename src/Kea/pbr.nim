@@ -1,144 +1,80 @@
-import 
-  renderer, 
-  mesh, 
-  math, 
-  ltc, 
-  texture, 
-  tonemap, 
+import
+  core,
+  renderer,
+  mesh,
+  math,
+  ltc,
+  texture,
+  tonemap,
   camera,
   target,
+  transform,
+  item,
   colors,
-  core
+  light,
+  std/[tables, sugar]
 
-type 
-  RectLight* = object
-    position*: Vec3
-    rotation*: Mat3 = Identity3
-    width*: float32 = 1.0
-    height*: float32 = 1.0
-    radiance*: Vec3
-
-  PBRMaterial* = tuple[
-    albedo: Vec3 = [1.0, 1.0, 1.0],
-    roughness: float32 = 0.5,
-    metallic: float32 = 0.0,
-  ]
-
-  PBRGlobals* = tuple[
+type
+  PBRGlobals = tuple[
     view: Mat4,
     proj: Mat4,
     eye: Vec3,
     light: RectLight,
     ltcInverseMatrixLut: Texture[Rgba32Float],
-    ltcMagnitudeFresnelLut: Texture[Rg32Float],
+    ltcMagnitudeFresnelLut: Texture[Rg32Float]
   ]
 
-  PBRRenderer* = Renderer[
-    PBRGlobals, 
-    PBRMaterial,
-    tuple[pixel: Vec4]
+  PBRMaterial = tuple[
+    albedo: Vec3 = [1.0, 1.0, 1.0],
+    roughness: float32 = 0.5,
+    metallic: float32 = 0.0,
   ]
+
+  PBRItem = ref object
+    mesh: Mesh
+    topology: Topology
+    transform: Transform
+    material: PBRMaterial 
+
+  PBRVert = proc(
+    vert: Vertex,
+    model: Mat4,
+    nmat: Mat3,
+    view, proj: Mat4
+  ): tuple[
+    pos: Vec4,
+    worldNormal: Vec3,
+    worldPosition: Vec3
+  ]
+
+  PBR* = ref object
+    lighting: Renderer[
+      PBRGlobals,
+      PBRMaterial,
+      tuple[pixel: Vec4]
+    ]
+
+    ltcInverseMatrixLut: Texture[Rgba32Float]
+    ltcMagnitudeFresnelLut: Texture[Rg32Float]
+
+    items: OrderedTable[string, PBRItem]
 
   Polygon = object
     vertices: array[5, Vec3]
     count: int
 
 const 
-  RedMaterial*: PBRMaterial = (
+  Red* = (
     albedo: [1.0, 0.0, 0.0],
     roughness: 0.5,
     metallic: 0.0
   )
 
-  WhiteMaterial*: PBRMaterial = (
+  White* = (
     albedo: [1.0, 1.0, 1.0],
     roughness: 0.5,
     metallic: 0.0
   )
-
-proc corners(light: RectLight): array[4, Vec3] =
-  let 
-    right = light.rotation * [-1.0'f, 0.0, 0.0]
-    up = light.rotation * [0.0'f, 1.0, 0.0]
-    x = right * light.width / 2.0
-    y = up * light.height / 2.0
-    center = light.position
-
-  [
-    center - y - x,
-    center + x - y,
-    center + x + y,
-    center - x + y
-  ]
-
-proc clipAgainstHorizon(vertices: array[4, Vec3]): Polygon =
-  for i in 0 ..< 4:
-    let
-      a = vertices[i]
-      b = vertices[(i + 1) mod 4]
-      aInside = a.z > 0
-      bInside = b.z > 0
-
-    if aInside:
-      result.vertices[result.count] = a
-      result.count += 1
-
-    if aInside != bInside:
-      let t = a.z / (a.z - b.z)
-      result.vertices[result.count] = mix(a, b, t)
-      result.count += 1
-
-proc edgeIntegral(a, b: Vec3): float32 =
-  let
-    x = dot(a, b)
-    y = x.abs
-    numerator = 0.8543985'f + (0.4965155'f + 0.0145206'f * y) * y
-    denominator = 3.4175940'f + (4.1616724'f + y) * y
-
-  var weight = numerator / denominator
-
-  if x <= 0:
-    weight = 0.5'f * max(1.0'f - x * x, 1e-7'f).invsqrt - weight
-
-  cross(a, b).z * weight
-
-proc integrateRect(
-  P, N, V: Vec3,
-  corners: array[4, Vec3],
-  inverseLtc: Mat3
-): float32 =
-  let
-    tangent = N.tangentToward(V)
-    bitangent = cross(N, tangent)
-    basis = [tangent, bitangent, N]
-    transform = inverseLtc * basis.transpose
-
-  var cosineCorners: array[4, Vec3]
-
-  for i in 0 ..< 4:
-    cosineCorners[i] = transform * (corners[i] - P)
-
-  var polygon = cosineCorners.clipAgainstHorizon
-
-  if polygon.count < 3:
-    return 0.0'f
-
-  for i in 0 ..< polygon.count:
-    polygon.vertices[i] = polygon.vertices[i].normalize
-
-  var integral = 0.0'f
-
-  for i in 0 ..< polygon.count:
-    let
-      a = polygon.vertices[i]
-      b = polygon.vertices[(i + 1) mod polygon.count]
-
-    integral += edgeIntegral(a, b)
-
-  max(0.0'f, integral)
-
-proc texelCenteredUv(size: Vec2, x, y: float32): Vec2 =
-  ([x, y] * (size - 1.0'f) + 0.5'f) / size
 
 proc vert*(
   vert: Vertex,
@@ -159,16 +95,85 @@ proc vert*(
 proc frag*(
   worldNormal: Vec3,
   worldPosition: Vec3,
-
   albedo: Vec3,
   roughness: float32,
   metallic: float32,
-
   eye: Vec3,
   light: RectLight,
   ltcInverseMatrixLut: Texture[Rgba32Float],
   ltcMagnitudeFresnelLut: Texture[Rg32Float]
 ): tuple[pixel: Vec4] = 
+  # TODO: add shader support for defining polygon here
+
+  proc clipAgainstHorizon(vertices: array[4, Vec3]): Polygon =
+    for i in 0 ..< 4:
+      let
+        a = vertices[i]
+        b = vertices[(i + 1) mod 4]
+        aInside = a.z > 0
+        bInside = b.z > 0
+
+      if aInside:
+        result.vertices[result.count] = a
+        result.count += 1
+
+      if aInside != bInside:
+        let t = a.z / (a.z - b.z)
+        result.vertices[result.count] = mix(a, b, t)
+        result.count += 1
+
+  proc edgeIntegral(a, b: Vec3): float32 =
+    let
+      x = dot(a, b)
+      y = x.abs
+      numerator = 0.8543985'f + (0.4965155'f + 0.0145206'f * y) * y
+      denominator = 3.4175940'f + (4.1616724'f + y) * y
+
+    var weight = numerator / denominator
+
+    if x <= 0:
+      weight = 0.5'f * max(1.0'f - x * x, 1e-7'f).invsqrt - weight
+
+    cross(a, b).z * weight
+
+  proc integrateRect(
+    P, N, V: Vec3,
+    corners: array[4, Vec3],
+    inverseLtc: Mat3
+  ): float32 =
+    let
+      tangent = N.tangentToward(V)
+      bitangent = cross(N, tangent)
+      basis = [tangent, bitangent, N]
+      transform = inverseLtc * basis.transpose
+
+    var cosineCorners: array[4, Vec3]
+
+    for i in 0 ..< 4:
+      cosineCorners[i] = transform * (corners[i] - P)
+
+    var polygon = cosineCorners.clipAgainstHorizon
+
+    if polygon.count < 3:
+      return 0.0'f
+
+    for i in 0 ..< polygon.count:
+      polygon.vertices[i] = polygon.vertices[i].normalize
+
+    var integral = 0.0'f
+
+    for i in 0 ..< polygon.count:
+      let
+        a = polygon.vertices[i]
+        b = polygon.vertices[(i + 1) mod polygon.count]
+
+      integral += edgeIntegral(a, b)
+
+    max(0.0'f, integral)
+
+  proc texelCenteredUv(size: Vec2, x, y: float32): Vec2 =
+    ([x, y] * (size - 1.0'f) + 0.5'f) / size
+
   let 
     P = worldPosition
     V = (eye - P).normalize
@@ -219,46 +224,122 @@ proc frag*(
     .gamma
     .hom
 
-proc new*(
-  kea: Kea,
-  light: RectLight
-): PBRRenderer = 
-  let 
-    ltcInverseMatrixLut = texture.new(
-      kea,
-      ltc.InverseMatrixData,
-      ltc.LutSize,
-      ltc.LutSize,
-      Rgba32Float,
-      LinearTextureOptions
-    )
+template new*(kea: Kea, vert: PBRVert): PBR =
+  block:
+    let
+      context = kea
 
-    ltcMagnitudeFresnelLut = texture.new(
-      kea,
-      ltc.MagnitudeFresnelData,
-      ltc.LutSize,
-      ltc.LutSize,
-      Rg32Float,
-      LinearTextureOptions
-    )
+      ltcInverseMatrixLut = texture.new(
+        context,
+        ltc.InverseMatrixData,
+        ltc.LutSize,
+        ltc.LutSize,
+        Rgba32Float,
+        LinearTextureOptions
+      )
 
-  renderer.new(
-    kea,
-    vert = vert,
-    frag = frag, 
-    globals = (
-      view: Identity4,
-      proj: Identity4,
-      eye: [0.0'f, 0.0, 0.0],
-      light: light,
+      ltcMagnitudeFresnelLut = texture.new(
+        context,
+        ltc.MagnitudeFresnelData,
+        ltc.LutSize,
+        ltc.LutSize,
+        Rg32Float,
+        LinearTextureOptions
+      )
+
+      lighting = renderer.new(
+        context,
+        vert,
+        frag,
+        globals = PBRGlobals,
+      )
+
+    PBR(
       ltcInverseMatrixLut: ltcInverseMatrixLut,
-      ltcMagnitudeFresnelLut: ltcMagnitudeFresnelLut
+      ltcMagnitudeFresnelLut: ltcMagnitudeFresnelLut,
+      lighting: lighting
+    )
+  
+proc new*(kea: Kea): PBR = 
+  new(kea, vert)
+
+proc render*(
+  pbr: PBR,
+  target: RenderTarget,
+  camera: Camera,
+  light: RectLight
+) =
+  let lightingItems = collect:
+    for source in pbr.items.values:
+      item.new(
+        source.mesh,
+        source.transform,
+        material = source.material,
+        topology = source.topology
+      )
+
+  pbr.lighting.render(
+    target,
+    lightingItems,
+    globals = (
+      view: camera.view,
+      proj: camera.proj target.aspect,
+      eye: camera.positioned,
+      light: light,
+      ltcInverseMatrixLut: pbr.ltcInverseMatrixLut,
+      ltcMagnitudeFresnelLut: pbr.ltcMagnitudeFresnelLut
     )
   )
 
-proc render*(pbr: PBRRenderer, target: RenderTarget, camera: Camera) =
-  pbr.eye = camera.positioned
-  pbr.view = camera.view
-  pbr.proj = camera.proj target.aspect
+proc add*(
+  pbr: PBR,
+  key: string,
+  mesh: Mesh,
+  transform: Transform,
+  material: PBRMaterial = PBRMaterial.default,
+  topology: Topology = Triangles
+): PBRItem =
+  result = PBRItem(
+    mesh: mesh,
+    topology: topology,
+    transform: transform,
+    material: material,
+  )
 
-  pbr.render(target)
+  pbr.items[key] = result
+
+proc add*(
+  pbr: PBR,
+  key: string,
+  mesh: Mesh,
+  material: PBRMaterial = PBRMaterial.default,
+  x: float32 = 0.0,
+  y: float32 = 0.0,
+  z: float32 = 0.0,
+  yaw: float32 = 0.0,
+  pitch: float32 = 0.0,
+  roll: float32 = 0.0,
+  scale: Vec3 = vec3(1.0),
+  topology: Topology = Triangles
+): PBRItem =
+  pbr.add(
+    key,
+    mesh,
+    transform.new(
+      x = x,
+      y = y,
+      z = z,
+      yaw = yaw,
+      pitch = pitch,
+      roll = roll,
+      scale = scale,
+    ),
+    material = material,
+    topology = topology,
+  )
+
+proc remove*(
+  pbr: PBR,
+  key: string
+) =
+  pbr.items.del(key)

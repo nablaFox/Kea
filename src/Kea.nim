@@ -16,6 +16,7 @@ import
     texture,
     allocator,
     tonemap,
+    light,
     resources
   ]
 
@@ -36,4 +37,5 @@ export
   texture,
   tonemap,
   allocator,
-  resources
+  resources,
+  light

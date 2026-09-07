@@ -7,18 +7,12 @@ import
   target,
   texture,
   core,
+  item,
   std/[typetraits, macros]
 
+export item
+
 type
-  Renderable* = ref object
-    mesh*: Mesh
-    transform*: Transform
-
-  RenderItem*[M: tuple] = ref object
-    renderable*: Renderable
-    topology*: Topology
-    material*: M
-
   RendererObj[
     G: tuple;
     M: tuple;
@@ -27,15 +21,12 @@ type
     kea: Kea
 
     program: Program
-    items: seq[RenderItem[M]]
 
     globalUniforms: seq[Uniform]
     materialUniforms: seq[Uniform]
 
     modelUniform: Uniform
     nmatUniform: Uniform
-
-    globals*: G
 
   Renderer*[
     G: tuple;
@@ -55,28 +46,17 @@ type
     DepthLessEqual
     DepthAlways
 
-{.experimental: "dotOperators".}
-
-template `.`*[G, M, A](r: Renderer[G, M, A], field: untyped): untyped =
-  r.globals.field
-
-template `.=`*[G, M, A](r: Renderer[G, M, A], field: untyped, value: untyped) =
-  r.globals.field = value
-
 proc `=destroy`[G, M, A](r: var RendererObj[G, M, A]) =
   {.cast(raises: []).}:
     r.program = nil
-    r.items = @[]
     r.globalUniforms = @[]
     r.materialUniforms = @[]
-    reset r.globals
     r.kea = nil
 
 proc newFromSources[G: tuple; M: tuple; A: tuple](
   kea: Kea,
   vertexSource: string,
-  fragmentSource: string,
-  globals: G
+  fragmentSource: string
 ): Renderer[G, M, A] =
   new(result)
 
@@ -94,25 +74,22 @@ proc newFromSources[G: tuple; M: tuple; A: tuple](
   result.modelUniform = result.program.uniform("model")
   result.nmatUniform = result.program.uniform("nmat")
 
-  result.globals = globals
-
-macro new*[G: tuple](
+macro new*(
   kea: Kea,
   vert, frag: typed,
-  globals: G = ()
+  globals: typedesc[tuple] = tuple[]
 ): untyped =
   let 
-    M = materialType(vert, frag, globals)
+    M = materialType(vert, frag, globals.getTypeInst[1])
     A = attachmentsType(frag)
     vs = vertGlslImpl(vert)
     fs = fragGlslImpl(vert, frag)
 
   result = quote do:
-    newFromSources[typeof(`globals`), `M`, `A`](
+    newFromSources[`globals`, `M`, `A`](
       `kea`,
       `vs`,
-      `fs`,
-      `globals`
+      `fs`
     )
 
 template compatible(Output, Attachment: typedesc): bool =
@@ -144,9 +121,18 @@ proc checkAttachments(
 
     checkAttachments(Outputs, Attachments, index + 1)
 
-template checkTargetCompatibility(
-  A, Atts: typedesc,
-  K: static RenderTargetKind
+proc render*[
+  G, M, A: tuple;
+  Atts: tuple;
+  K: static RenderTargetKind;
+](
+  renderer: Renderer[G, M, A],
+  target: RenderTarget[K, Atts],
+  items: openArray[RenderItem[M]],
+  globals: G = G.default,
+  cullMode: CullMode = CullBack,
+  depthTest: DepthTest = DepthLess,
+  depthWrite: bool = true
 ) =
   when K == BackBuffer:
     when A.tupleLen != 1:
@@ -166,13 +152,8 @@ template checkTargetCompatibility(
     else:
       checkAttachments(A, Atts)
 
-proc applyRenderState[
-  K: static RenderTargetKind
-](
-  depthTest: DepthTest,
-  depthWrite: bool,
-  cullMode: CullMode,
-) =
+  target.use()
+
   when K in {BackBuffer, DepthOnly, ColorDepth}:
     case depthTest
     of DepthDisabled:
@@ -204,82 +185,22 @@ proc applyRenderState[
     glEnable(GL_CULL_FACE)
     glCullFace(GL_FRONT)
 
-proc render*[
-  G, M, A: tuple;
-  Atts: tuple;
-  K: static RenderTargetKind;
-](
-  renderer: Renderer[G, M, A], 
-  target: RenderTarget[K, Atts], 
-  cullMode: CullMode = CullBack,
-  depthTest: DepthTest = DepthLess,
-  depthWrite: bool = true,
-) = 
-  checkTargetCompatibility(A, Atts, K)
- 
-  target.use()
-
-  applyRenderState[K](
-    depthTest,
-    depthWrite,
-    cullMode,
-  )
-
   renderer.program.use()
 
-  renderer.globalUniforms.set(renderer.globals)
+  renderer.globalUniforms.set(globals)
 
-  for item in renderer.items:
-    let renderable = item.renderable
-    let model = renderable.transform.model
-    let nmat = model.normalMatrix
+  for item in items:
+    let 
+      renderable = item.renderable
+      model = renderable.transform.model
+      nmat = model.normalMatrix
 
     renderer.modelUniform.set(model)
     renderer.nmatUniform.set(nmat)
 
     renderer.materialUniforms.set(item.material)
 
-    renderable.mesh.draw(topology = item.topology)
-
-proc render*[
-  G, M, A: tuple;
-  Atts: tuple;
-  K: static RenderTargetKind;
-](
-  renderer: Renderer[G, M, A], 
-  target: RenderTarget[K, Atts], 
-  mesh: Mesh,
-  transform: var Transform,
-  material: M = M.default,
-  topology = Triangles,
-  cullMode: CullMode = CullBack,
-  depthTest: DepthTest = DepthLess,
-  depthWrite: bool = true,
-) = 
-  checkTargetCompatibility(A, Atts, K)
- 
-  target.use()
-
-  applyRenderState[K](
-    depthTest,
-    depthWrite,
-    cullMode,
-  )
-
-  renderer.program.use()
-
-  renderer.globalUniforms.set(renderer.globals)
-
-  let 
-    model = transform.model
-    nmat = model.normalMatrix
-
-  renderer.modelUniform.set(model)
-  renderer.nmatUniform.set(nmat)
-
-  renderer.materialUniforms.set(material)
-
-  mesh.draw(topology = topology)
+    renderable.mesh.draw(topology = renderable.topology)
 
 proc render*[
   G, M, A: tuple;
@@ -288,121 +209,17 @@ proc render*[
 ](
   renderer: Renderer[G, M, A],
   target: RenderTarget[K, Atts],
-  mesh: Mesh,
-  x: float32 = 0.0,
-  y: float32 = 0.0,
-  z: float32 = 0.0,
-  yaw: float32 = 0.0,
-  pitch: float32 = 0.0,
-  roll: float32 = 0.0,
-  scale: Vec3 = vec3(1.0),
-  material: M = M.default,
-  topology = Triangles,
+  item: RenderItem[M],
+  globals: G = G.default,
   cullMode: CullMode = CullBack,
   depthTest: DepthTest = DepthLess,
-  depthWrite: bool = true,
+  depthWrite: bool = true
 ) =
-  var transform = transform.new(
-    x = x,
-    y = y,
-    z = z,
-    pitch = pitch,
-    yaw = yaw,
-    roll = roll,
-    scale = scale,
-  )
-
   renderer.render(
     target,
-    mesh,
-    transform,
-    material,
-    topology,
+    [item],
+    globals,
     cullMode,
     depthTest,
-    depthWrite,
+    depthWrite
   )
-
-proc add*[G, M, A](
-  renderer: Renderer[G, M, A],
-  item: RenderItem[M]
-): RenderItem[M] =
-  renderer.items.add(item)
-  item
-
-proc add*[G, M, A](
-  renderer: Renderer[G, M, A],
-  mesh: Mesh,
-  material: M = M.default,
-  transform: Transform,
-  topology = Triangles,
-): RenderItem[M] =
-  doAssert mesh != nil, "Cannot add a nil mesh"
-
-  let renderable = Renderable(
-    mesh: mesh,
-    transform: transform
-  )
-
-  result = RenderItem[M](
-    renderable: renderable,
-    material: material,
-    topology: topology
-  )
-
-  renderer.items.add(result)
-
-proc add*[G, M, A](
-  renderer: Renderer[G, M, A],
-  mesh: Mesh,
-  material: M = M.default,
-  x: float32 = 0.0,
-  y: float32 = 0.0,
-  z: float32 = 0.0,
-  yaw: float32 = 0.0,
-  pitch: float32 = 0.0,
-  roll: float32 = 0.0,
-  scale: Vec3 = vec3(1.0),
-  topology = Triangles,
-): RenderItem[M] =
-  renderer.add(
-    mesh,
-    material,
-    transform.new(
-      x = x,
-      y = y,
-      z = z,
-      pitch = pitch,
-      yaw = yaw,
-      roll = roll,
-      scale = scale
-    ),
-    topology,
-  )
-
-proc transform*(item: RenderItem): var Transform =
-  item.renderable.transform
-
-proc position*(item: RenderItem): var Vec3 =
-  item.renderable.transform.position
-
-proc positioned*(item: RenderItem): Vec3 =
-  let transform = item.renderable.transform
-  transform.position
-
-proc scale*(item: RenderItem): var Vec3 =
-  item.renderable.transform.scale
-
-proc scaled*(item: RenderItem): Vec3 =
-  let transform = item.renderable.transform
-  transform.scale
-
-proc rotation*(item: RenderItem): var Mat3 =
-  item.renderable.transform.rotation
-
-proc rotated*(item: RenderItem): Mat3 =
-  let transform = item.renderable.transform
-  transform.rotation
-
-proc model*(item: RenderItem): Mat4 =
-  item.renderable.transform.model
