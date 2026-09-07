@@ -237,22 +237,6 @@ proc createTexture[F: static TextureFormat](
     previousTexture.GLuint,
   )
 
-template new*(
-  kea: Kea,
-  data: pointer,
-  width, height: Natural,
-  format: static TextureFormat,
-  options: TextureOptions,
-): untyped =
-  createTexture[format](
-    kea,
-    data,
-    width,
-    height,
-    format.info,
-    options,
-  )
-
 proc new*(
   kea: Kea,
   data: string,
@@ -301,15 +285,16 @@ proc new*(
     options
   )
 
-template new*(
+proc new*(
   kea: Kea,
+  data: pointer,
   width, height: Natural,
-  format: untyped,
-  options: TextureOptions,
-): untyped =
+  format: static TextureFormat,
+  options: TextureOptions
+): Texture[format] =
   createTexture[format](
     kea,
-    nil,
+    data,
     width,
     height,
     format.info,

@@ -104,8 +104,12 @@ proc render(
   res: Resources,
   backbuffer: BackBufferTarget, 
   camera: Camera,
-  x, y, z: float32 = 0.0,
-  yaw, pitch, roll: float32 = 0.0
+  x: float32 = 0.0,
+  y: float32 = 0.0,
+  z: float32 = 0.0,
+  yaw: float32 = 0.0,
+  pitch: float32 = 0.0,
+  roll: float32 = 0.0
 ) = 
   proc vert(
     vert: Vertex,
@@ -151,7 +155,7 @@ proc render(
 
       elif objectNormal.x < -0.99:
         let 
-          color = [0.95'f, 0.65, 0.20] 
+          color = [0.35'f, 0.55, 1.0]
 
           density = diffuse.density(uv)
 
@@ -166,14 +170,14 @@ proc render(
 
         [0.28'f, 0.42, 0.48] * lighting
 
-    result.pixel = color.sRGB.hom
+    result.pixel = color.gamma.hom
 
   let
     transmittance = res.texture(
       "mcml/transmittance",
       data = mcml.transmittance,
-      width = resolution, 
-      height = resolution, 
+      width = mcml.resolution, 
+      height = mcml.resolution, 
       format = R32Float,
       DataTextureOptions
     ) 
@@ -220,12 +224,12 @@ proc render(
 let 
   kea = init(
     title = "mcml",
-    width = 800, 
-    height = 600, 
+    width = 1920, 
+    height = 1080, 
     cursor = Disabled
   )
 
-  res = kea.resources
+  res = resources.new(kea)
 
 var 
   mcml = new(
@@ -251,7 +255,7 @@ for frame in kea.frames:
 
   orbit.update(frame)
 
-  mcml.update(photons = 10_000)
+  mcml.update(photons = 20_000)
 
   frame.backbuffer.clear(color = White * 0.1)
 
@@ -259,7 +263,7 @@ for frame in kea.frames:
     res, 
     frame.backbuffer, 
     orbit.camera,
-    yaw = PI / 2.0,
+    yaw = -(PI / 2.0),
     y = 1.0
   )
 

@@ -144,17 +144,10 @@ proc checkAttachments(
 
     checkAttachments(Outputs, Attachments, index + 1)
 
-proc render*[
-  G, M, A: tuple;
-  Atts: tuple;
-  K: static RenderTargetKind;
-](
-  renderer: Renderer[G, M, A], 
-  target: RenderTarget[K, Atts], 
-  cullMode: CullMode = CullBack,
-  depthTest: DepthTest = DepthLess,
-  depthWrite: bool = true,
-) = 
+template checkTargetCompatibility(
+  A, Atts: typedesc,
+  K: static RenderTargetKind
+) =
   when K == BackBuffer:
     when A.tupleLen != 1:
       {.error: "Backbuffer requires exactly one fragment output".}
@@ -171,11 +164,15 @@ proc render*[
       {.error: "Fragment output count does not match target attachment count".}
 
     else:
-      static:
-        checkAttachments(A, Atts)
- 
-  target.use()
+      checkAttachments(A, Atts)
 
+proc applyRenderState[
+  K: static RenderTargetKind
+](
+  depthTest: DepthTest,
+  depthWrite: bool,
+  cullMode: CullMode,
+) =
   when K in {BackBuffer, DepthOnly, ColorDepth}:
     case depthTest
     of DepthDisabled:
@@ -207,6 +204,27 @@ proc render*[
     glEnable(GL_CULL_FACE)
     glCullFace(GL_FRONT)
 
+proc render*[
+  G, M, A: tuple;
+  Atts: tuple;
+  K: static RenderTargetKind;
+](
+  renderer: Renderer[G, M, A], 
+  target: RenderTarget[K, Atts], 
+  cullMode: CullMode = CullBack,
+  depthTest: DepthTest = DepthLess,
+  depthWrite: bool = true,
+) = 
+  checkTargetCompatibility(A, Atts, K)
+ 
+  target.use()
+
+  applyRenderState[K](
+    depthTest,
+    depthWrite,
+    cullMode,
+  )
+
   renderer.program.use()
 
   renderer.globalUniforms.set(renderer.globals)
@@ -222,6 +240,88 @@ proc render*[
     renderer.materialUniforms.set(item.material)
 
     renderable.mesh.draw(topology = item.topology)
+
+proc render*[
+  G, M, A: tuple;
+  Atts: tuple;
+  K: static RenderTargetKind;
+](
+  renderer: Renderer[G, M, A], 
+  target: RenderTarget[K, Atts], 
+  mesh: Mesh,
+  transform: var Transform,
+  material: M = M.default,
+  topology = Triangles,
+  cullMode: CullMode = CullBack,
+  depthTest: DepthTest = DepthLess,
+  depthWrite: bool = true,
+) = 
+  checkTargetCompatibility(A, Atts, K)
+ 
+  target.use()
+
+  applyRenderState[K](
+    depthTest,
+    depthWrite,
+    cullMode,
+  )
+
+  renderer.program.use()
+
+  renderer.globalUniforms.set(renderer.globals)
+
+  let 
+    model = transform.model
+    nmat = model.normalMatrix
+
+  renderer.modelUniform.set(model)
+  renderer.nmatUniform.set(nmat)
+
+  renderer.materialUniforms.set(material)
+
+  mesh.draw(topology = topology)
+
+proc render*[
+  G, M, A: tuple;
+  Atts: tuple;
+  K: static RenderTargetKind;
+](
+  renderer: Renderer[G, M, A],
+  target: RenderTarget[K, Atts],
+  mesh: Mesh,
+  x: float32 = 0.0,
+  y: float32 = 0.0,
+  z: float32 = 0.0,
+  yaw: float32 = 0.0,
+  pitch: float32 = 0.0,
+  roll: float32 = 0.0,
+  scale: Vec3 = vec3(1.0),
+  material: M = M.default,
+  topology = Triangles,
+  cullMode: CullMode = CullBack,
+  depthTest: DepthTest = DepthLess,
+  depthWrite: bool = true,
+) =
+  var transform = transform.new(
+    x = x,
+    y = y,
+    z = z,
+    pitch = pitch,
+    yaw = yaw,
+    roll = roll,
+    scale = scale,
+  )
+
+  renderer.render(
+    target,
+    mesh,
+    transform,
+    material,
+    topology,
+    cullMode,
+    depthTest,
+    depthWrite,
+  )
 
 proc add*[G, M, A](
   renderer: Renderer[G, M, A],

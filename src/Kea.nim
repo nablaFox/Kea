@@ -15,7 +15,8 @@ import
     orbit,
     texture,
     allocator,
-    tonemap
+    tonemap,
+    resources
   ]
 
 export 
@@ -34,4 +35,5 @@ export
   orbit,
   texture,
   tonemap,
-  allocator
+  allocator,
+  resources

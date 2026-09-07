@@ -102,11 +102,12 @@ proc model*(transform: var Transform): Mat4 =
   if not transform.dirty: 
     return transform.cachedMatrix
 
-  let trans = transform.transMatrix
+  let
+    trans = transform.transMatrix
 
-  let scale = transform.scaleMatrix
+    scale = transform.scaleMatrix
 
-  let rot = transform.rotMatrix
+    rot = transform.rotMatrix
 
   transform.cachedMatrix = trans * rot * scale
   transform.dirty = false
