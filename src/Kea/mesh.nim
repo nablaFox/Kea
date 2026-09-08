@@ -1,70 +1,102 @@
-import nimgl/opengl, allocator, math, vertex
-
-export vertex
+import nimgl/opengl, allocator, math
 
 type
+  Topology* = enum
+    Triangles, Lines, Points,
+    LineStrip, LineLoop, TriangleStrip,
+    TriangleFan
+
   Mesh* = ref object
     allocator: MeshAllocator
 
-    vertices: seq[Vertex]
-
     vertexOffset: uint32
     indexOffset: uint32
+
+    vertexCount: int
     indexCount: int
 
-proc uploadVertices(mesh: Mesh) =
-  if mesh.vertices.len == 0:
-    return
+proc new*(
+  allocator: MeshAllocator,
+  vertexCount: Natural,
+  indexCount: Natural
+): Mesh =
+  let (vertexOffset, indexOffset) = allocator
+    .allocate(
+      vertexCount.uint32,
+      indexCount.uint32
+    ) 
 
-  mesh.allocator.use()
-
-  glBufferSubData(
-    GL_ARRAY_BUFFER,
-    GLintptr(mesh.vertexOffset) * sizeof(Vertex),
-    GLsizeiptr(mesh.vertices.len * sizeof(Vertex)),
-    addr mesh.vertices[0],
+  Mesh(
+    allocator: allocator,
+    vertexOffset: vertexOffset,
+    indexOffset: indexOffset,
+    vertexCount: vertexCount,
+    indexCount: indexCount
   )
 
 proc new*(
   allocator: MeshAllocator,
-  vertices: openArray[Vertex],
-  indices: openArray[Index]
+  positions: openArray[Vec3],
+  normals: openArray[Vec3],
+  indices: openArray[uint32],
+  uvs: openArray[Vec2] = [],
+  colors: openArray[Vec3] = []
 ): Mesh =
-  let (vertexOffset, indexOffset) = allocator.allocate(
-    vertices.len.uint32,
-    indices.len.uint32
-  )
+  let 
+    vertexCount = positions.len.Natural
+    indexCount = indices.len.Natural
 
-  result = Mesh(
-    allocator: allocator,
-    vertices: @vertices,
-    vertexOffset: vertexOffset,
-    indexOffset: indexOffset,
-    indexCount: indices.len,
-  )
+  doAssert normals.len == vertexCount
+  doAssert colors.len == 0 or colors.len == vertexCount
+  doAssert uvs.len == 0 or uvs.len == vertexCount
 
-  result.uploadVertices()
+  result = new(allocator, vertexCount, indexCount)
 
-  if indices.len > 0:
-    allocator.use()
-    glBufferSubData(
-      GL_ELEMENT_ARRAY_BUFFER,
-      GLintptr(indexOffset) * sizeof(Index),
-      GLsizeiptr(indices.len * sizeof(Index)),
-      addr indices[0],
-    )
+  let
+    vertexOffset = result.vertexOffset
+    indexOffset = result.indexOffset
 
-proc update*(mesh: Mesh, positions, normals: openArray[Vec3]) =
-  doAssert positions.len == mesh.vertices.len,
+  allocator.uploadPositions(vertexOffset, positions)
+  allocator.uploadNormals(vertexOffset, normals)
+  allocator.uploadColors(vertexOffset, colors)
+  allocator.uploadUvs(vertexOffset, uvs)
+  allocator.uploadIndices(indexOffset, indices)
+
+proc update*(
+  mesh: Mesh,
+  positions: openArray[Vec3],
+  normals: openArray[Vec3],
+  colors: openArray[Vec3] = [],
+  uvs: openArray[Vec2] = [],
+  indices: openArray[uint32] = []
+) =
+  doAssert positions.len == mesh.vertexCount,
     "Position count must match the mesh vertex count"
-  doAssert normals.len == mesh.vertices.len,
+
+  doAssert normals.len == mesh.vertexCount,
     "Normal count must match the mesh vertex count"
 
-  for i in 0 ..< positions.len:
-    mesh.vertices[i].position = positions[i]
-    mesh.vertices[i].normal = normals[i]
+  doAssert colors.len == 0 or colors.len == mesh.vertexCount,
+    "Color count must match the mesh vertex count"
 
-  mesh.uploadVertices()
+  doAssert uvs.len == 0 or uvs.len == mesh.vertexCount,
+    "UV count must match the mesh vertex count"
+
+  mesh.allocator.uploadPositions(mesh.vertexOffset, positions)
+  mesh.allocator.uploadNormals(mesh.vertexOffset, normals)
+  mesh.allocator.uploadColors(mesh.vertexOffset, colors)
+  mesh.allocator.uploadUvs(mesh.vertexOffset, uvs)
+  mesh.allocator.uploadIndices(mesh.indexOffset, indices)
+
+proc glMode*(topology: Topology): GLenum =
+  case topology
+  of Triangles: GL_TRIANGLES
+  of Lines: GL_LINES
+  of Points: GL_POINTS
+  of LineStrip: GL_LINE_STRIP
+  of LineLoop: GL_LINE_LOOP
+  of TriangleStrip: GL_TRIANGLE_STRIP
+  of TriangleFan: GL_TRIANGLE_FAN
 
 proc draw*(mesh: Mesh, topology: Topology) =
   mesh.allocator.use()
@@ -73,6 +105,12 @@ proc draw*(mesh: Mesh, topology: Topology) =
     topology.glMode,
     GLsizei(mesh.indexCount),
     GL_UNSIGNED_INT,
-    cast[pointer](GLintptr(mesh.indexOffset) * sizeof(Index)),
+    cast[pointer](GLintptr(mesh.indexOffset) * sizeof(uint32)),
     GLint(mesh.vertexOffset),
   )
+
+proc vertexCount*(mesh: Mesh): int =
+  mesh.vertexCount
+
+proc indexCount*(mesh: Mesh): int =
+  mesh.indexCount

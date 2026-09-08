@@ -3,6 +3,7 @@ import
   renderer,
   mesh,
   math,
+  shader,
   ltc,
   texture,
   tonemap,

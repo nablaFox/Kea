@@ -1,6 +1,5 @@
 import
   math,
-  mesh,
   texture,
   colors,
   std/[macros, sequtils, strutils, math]
@@ -26,6 +25,12 @@ const
   """
 
 type
+  Vertex* = object
+    position*: Vec3
+    normal*: Vec3
+    color*: Vec3
+    uv*: Vec2
+
   Parameter = tuple[name, typ: NimNode]
 
   Signature = object

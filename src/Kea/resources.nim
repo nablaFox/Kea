@@ -1,6 +1,7 @@
 import
+  math,
   core,
-  texture,
+  texture as textureModule,
   mesh,
   renderer,
   allocator,
@@ -78,25 +79,92 @@ proc mesh*(
     res.allocator.mesh(primitive)
   )
 
-# TODO: update vertices and indices
 proc mesh*(
   res: Resources,
   key: string,
-  vertices: openArray[Vertex],
-  indices: openArray[Index]
+  positions: openArray[Vec3],
+  normals: openArray[Vec3],
+  indices: openArray[uint32],
+  uvs: openArray[Vec2] = [],
+  colors: openArray[Vec3] = []
 ): Mesh =
-  cached(
+  let
+    vertexCount = positions.len
+    indexCount = indices.len
+
+  result = cached(
     res.meshes,
     key,
-    mesh.new(res.allocator, vertices, indices)
+    mesh.new(
+      res.allocator,
+      vertexCount,
+      indexCount
+    )
+  )
+
+  doAssert result.vertexCount == vertexCount,
+    "Cached mesh vertex count do not match requested"
+
+  doAssert result.indexCount == indexCount,
+    "Cached mesh index count do not match requested"
+
+  result.update(
+    positions,
+    normals,
+    colors,
+    uvs,
+    indices
   )
 
 proc mesh*(
   res: Resources,
-  vertices: openArray[Vertex],
-  indices: openArray[Index]
+  positions: openArray[Vec3],
+  normals: openArray[Vec3],
+  indices: openArray[uint32],
+  uvs: openArray[Vec2] = [],
+  colors: openArray[Vec3] = []
 ): Mesh =
-  mesh.new(res.allocator, vertices, indices)
+  mesh.new(
+    res.allocator,
+    positions,
+    normals,
+    indices,
+    uvs,
+    colors
+  )
+
+proc mesh*(
+  res: Resources,
+  vertexCount: Natural,
+  indexCount: Natural
+): Mesh =
+  mesh.new(
+    res.allocator,
+    vertexCount,
+    indexCount
+  )
+
+proc mesh*(
+  res: Resources,
+  key: string,
+  vertexCount: Natural,
+  indexCount: Natural
+): Mesh =
+  result = cached(
+    res.meshes,
+    key,
+    mesh.new(
+      res.allocator,
+      vertexCount,
+      indexCount
+    )
+  )
+
+  doAssert result.vertexCount == vertexCount,
+    "Cached mesh vertex count do not match requested"
+
+  doAssert result.indexCount == indexCount,
+    "Cached mesh index count do not match requested"
 
 proc texture*(
   res: Resources,
@@ -105,7 +173,7 @@ proc texture*(
   format: static TextureFormat,
   options: TextureOptions
 ): Texture[format] =
-  texture.new(
+  textureModule.new(
     res.kea,
     data,
     width,
@@ -136,7 +204,7 @@ proc texture*(
   result = cached(
     res.textures,
     key,
-    texture.new(
+    textureModule.new(
       res.kea,
       nil,
       width,
@@ -149,6 +217,9 @@ proc texture*(
   doAssert result.width == width and result.height == height,
     "Cached texture dimensions do not match requested dimensions"
 
+  doAssert result.options == options,
+    "Cached texture options do not match requested options"
+
   result.update(addr data[0])
 
 proc texture*(
@@ -158,7 +229,7 @@ proc texture*(
   format: static TextureFormat,
   options: TextureOptions,
 ): Texture[format] =
-  texture.new(
+  textureModule.new(
     res.kea,
     data,
     width,
@@ -178,7 +249,7 @@ proc texture*(
   result = cached(
     res.textures,
     key,
-    texture.new(
+    textureModule.new(
       res.kea,
       nil,
       width,
@@ -191,6 +262,9 @@ proc texture*(
   doAssert result.width == width and result.height == height,
     "Cached texture dimensions do not match requested dimensions"
 
+  doAssert result.options == options,
+    "Cached texture options do not match requested options"
+
   result.update(data)
 
 proc texture*(
@@ -199,7 +273,7 @@ proc texture*(
   format: static TextureFormat,
   options: TextureOptions,
 ): Texture[format] =
-  texture.new(
+  textureModule.new(
     res.kea,
     nil,
     width,
@@ -215,10 +289,10 @@ proc texture*(
   format: static TextureFormat,
   options: TextureOptions,
 ): Texture[format] =
-  cached(
+  result = cached(
     res.textures,
     key,
-    texture.new(
+    textureModule.new(
       res.kea,
       nil,
       width,
@@ -228,6 +302,12 @@ proc texture*(
     )
   )
 
+  doAssert result.width == width and result.height == height,
+    "Cached texture dimensions do not match requested dimensions"
+
+  doAssert result.options == options,
+    "Cached texture options do not match requested options"
+
 proc texture*(
   res: Resources,
   data: pointer,
@@ -235,7 +315,7 @@ proc texture*(
   format: static TextureFormat,
   options: TextureOptions
 ): Texture[format] =
-  texture.new(
+  textureModule.new(
     res.kea,
     data,
     width,
@@ -255,7 +335,7 @@ proc texture*(
   result = cached(
     res.textures,
     key,
-    texture.new(
+    textureModule.new(
       res.kea,
       nil,
       width,
@@ -267,6 +347,9 @@ proc texture*(
 
   doAssert result.width == width and result.height == height,
     "Cached texture dimensions do not match requested dimensions"
+
+  doAssert result.options == options,
+    "Cached texture options do not match requested options"
 
   if data != nil:
     result.update(data)

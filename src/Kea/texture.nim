@@ -27,6 +27,7 @@ type
     id: GLuint
     width: int
     height: int
+    options: TextureOptions
     sampleHandle: GLuint64
 
     when F in {Rgba8Linear, R32Float, Rg32Float, Rgba32Float}:
@@ -181,6 +182,7 @@ proc createTexture[F: static TextureFormat](
   result.kea = kea
   result.width = width.int
   result.height = height.int
+  result.options = options
 
   var previousTexture: GLint
 
@@ -368,6 +370,9 @@ proc update*[F: static TextureFormat](
 
   if data.len > 0:
     texture.update(addr data[0])
+
+proc options*[F](texture: Texture[F]): TextureOptions =
+  texture.options
 
 proc id*[F](texture: Texture[F]): GLuint =
   texture.id

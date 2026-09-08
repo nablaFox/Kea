@@ -17,7 +17,8 @@ import
     allocator,
     tonemap,
     light,
-    resources
+    resources,
+    shader
   ]
 
 export
@@ -38,4 +39,5 @@ export
   tonemap,
   allocator,
   resources,
-  light
+  light,
+  shader
