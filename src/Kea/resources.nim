@@ -72,14 +72,13 @@ proc mesh*(
   if not cached:
     return res.allocator.mesh(primitive)
 
-  let key = $primitive
+  cached(
+    res.meshes,
+    $primitive,
+    res.allocator.mesh(primitive)
+  )
 
-  result = res.meshes.getOrDefault(key)
-
-  if result == nil:
-    result = res.allocator.mesh(primitive)
-    res.meshes[key] = result
-
+# TODO: update vertices and indices
 proc mesh*(
   res: Resources,
   key: string,
@@ -91,6 +90,13 @@ proc mesh*(
     key,
     mesh.new(res.allocator, vertices, indices)
   )
+
+proc mesh*(
+  res: Resources,
+  vertices: openArray[Vertex],
+  indices: openArray[Index]
+): Mesh =
+  mesh.new(res.allocator, vertices, indices)
 
 proc texture*(
   res: Resources,

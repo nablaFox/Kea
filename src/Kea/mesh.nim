@@ -7,37 +7,22 @@ type
     allocator: MeshAllocator
 
     vertices: seq[Vertex]
-    indices: seq[Index]
 
     vertexOffset: uint32
     indexOffset: uint32
+    indexCount: int
 
-    vertexCapacity: uint32
-    indexCapacity: uint32
-
-proc upload(mesh: Mesh) =
-  let
-    vertices = mesh.vertices
-    indices = mesh.indices
-
-    vertexData = if vertices.len > 0: addr mesh.vertices[0] else: nil
-
-    indexData = if indices.len > 0: addr mesh.indices[0] else: nil
+proc uploadVertices(mesh: Mesh) =
+  if mesh.vertices.len == 0:
+    return
 
   mesh.allocator.use()
 
   glBufferSubData(
     GL_ARRAY_BUFFER,
-    GLintptr(mesh.vertexOffset * sizeof(Vertex).uint32),
-    GLsizeiptr(vertices.len * sizeof(Vertex)),
-    vertexData,
-  )
-
-  glBufferSubData(
-    GL_ELEMENT_ARRAY_BUFFER,
-    GLintptr(mesh.indexOffset * sizeof(Index).uint32),
-    GLsizeiptr(indices.len * sizeof(Index)),
-    indexData,
+    GLintptr(mesh.vertexOffset) * sizeof(Vertex),
+    GLsizeiptr(mesh.vertices.len * sizeof(Vertex)),
+    addr mesh.vertices[0],
   )
 
 proc new*(
@@ -53,62 +38,41 @@ proc new*(
   result = Mesh(
     allocator: allocator,
     vertices: @vertices,
-    indices: @indices,
     vertexOffset: vertexOffset,
     indexOffset: indexOffset,
-    vertexCapacity: vertices.len.uint32,
-    indexCapacity: indices.len.uint32,
+    indexCount: indices.len,
   )
 
-  upload(result)
+  result.uploadVertices()
 
-proc update*(
-  mesh: Mesh,
-  vertices: sink seq[Vertex],
-  indices: sink seq[Index]
-) =
-  doAssert vertices.len.uint32 <= mesh.vertexCapacity
-  doAssert indices.len.uint32 <= mesh.indexCapacity
+  if indices.len > 0:
+    allocator.use()
+    glBufferSubData(
+      GL_ELEMENT_ARRAY_BUFFER,
+      GLintptr(indexOffset) * sizeof(Index),
+      GLsizeiptr(indices.len * sizeof(Index)),
+      addr indices[0],
+    )
 
-  mesh.vertices = vertices
-  mesh.indices = indices
+proc update*(mesh: Mesh, positions, normals: openArray[Vec3]) =
+  doAssert positions.len == mesh.vertices.len,
+    "Position count must match the mesh vertex count"
+  doAssert normals.len == mesh.vertices.len,
+    "Normal count must match the mesh vertex count"
 
-  upload(mesh)
+  for i in 0 ..< positions.len:
+    mesh.vertices[i].position = positions[i]
+    mesh.vertices[i].normal = normals[i]
 
-proc indices*(mesh: Mesh): lent seq[Index] =
-  mesh.indices
-
-proc vertices*(mesh: Mesh): lent seq[Vertex] =
-  mesh.vertices
-
-proc `vertices=`*(mesh: Mesh, vertices: sink seq[Vertex]) =
-  doAssert vertices.len.uint32 <= mesh.vertexCapacity
-  mesh.vertices = vertices
-  upload(mesh)
-
-proc `indices=`*(mesh: Mesh, indices: sink seq[Index]) =
-  doAssert indices.len.uint32 <= mesh.indexCapacity
-  mesh.indices = indices
-  upload(mesh)
-
-proc setVertex*(mesh: Mesh, index: Natural, vertex: Vertex) =
-  doAssert index < mesh.vertices.len
-  mesh.vertices[index] = vertex
-  upload(mesh)
-
-proc update*(
-  mesh: Mesh,
-  positions: openArray[Vec3]
-)
-  {.error: "not implemented".} = discard
+  mesh.uploadVertices()
 
 proc draw*(mesh: Mesh, topology: Topology) =
   mesh.allocator.use()
 
   glDrawElementsBaseVertex(
     topology.glMode,
-    GLsizei(mesh.indices.len),
+    GLsizei(mesh.indexCount),
     GL_UNSIGNED_INT,
-    cast[pointer](mesh.indexOffset * sizeof(Index).uint32),
+    cast[pointer](GLintptr(mesh.indexOffset) * sizeof(Index)),
     GLint(mesh.vertexOffset),
   )

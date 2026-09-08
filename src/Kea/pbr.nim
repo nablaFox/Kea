@@ -32,7 +32,7 @@ type
 
   PBRItem* = ref object
     renderable*: Renderable
-    material: PBRMaterial
+    material*: PBRMaterial
 
   PBRVert* = proc(
     vert: Vertex,
@@ -347,3 +347,24 @@ proc remove*(
   key: string
 ) =
   pbr.items.del(key)
+
+proc transform*(item: PBRItem): var Transform =
+  item.renderable.transform
+
+proc position*(item: PBRItem): var Vec3 =
+  item.renderable.position
+
+proc positioned*(item: PBRItem): Vec3 =
+  item.renderable.positioned
+
+proc scale*(item: PBRItem): var Vec3 =
+  item.renderable.scale
+
+proc scaled*(item: PBRItem): Vec3 =
+  item.renderable.scaled
+
+proc rotation*(item: PBRItem): var Mat3 =
+  item.renderable.rotation
+
+proc rotated*(item: PBRItem): Mat3 =
+  item.renderable.rotated

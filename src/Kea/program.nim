@@ -72,7 +72,11 @@ proc use*(program: Program) =
 template glTypeOf(T: typedesc): GLenum =
   when T is uint32:
     GL_UNSIGNED_INT
-  elif T is float32:
+  elif T is int32 or T is int:
+    EGL_INT
+  elif T is bool:
+    GL_BOOL
+  elif T is float32 or T is float64:
     EGL_FLOAT
   elif T is Vec2:
     GL_FLOAT_VEC2
@@ -129,9 +133,17 @@ proc set*(uniform: Uniform, value: uint32) =
   checkType(uniform, value)
   glUniform1ui(uniform.location, value.GLuint)
 
-proc set*(uniform: Uniform, value: float32) =
+proc set*(uniform: Uniform, value: int32 | int) =
   checkType(uniform, value)
-  glUniform1f(uniform.location, value)
+  glUniform1i(uniform.location, value.GLint)
+
+proc set*(uniform: Uniform, value: bool) =
+  checkType(uniform, value)
+  glUniform1i(uniform.location, value.GLint)
+
+proc set*(uniform: Uniform, value: float32 | float64) =
+  checkType(uniform, value)
+  glUniform1f(uniform.location, value.GLfloat)
 
 proc set*(uniform: Uniform, value: Vec2) =
   checkType(uniform, value)
@@ -210,6 +222,10 @@ proc set*[T: tuple](uniforms: openArray[Uniform], values: T) =
       for _, field in value.fieldPairs:
         helper(uniforms, field, index)
 
+    elif U is array:
+      for element in value:
+        helper(uniforms, element, index)
+
     else:
       {.error: "Unsupported uniform type: " & $U.}
 
@@ -236,6 +252,10 @@ proc uniforms*[T: tuple](program: Program): seq[Uniform] =
             name & "." & fieldName
 
         collect(program, childName, fieldValue, uniforms)
+
+    elif U is array:
+      for index, element in value:
+        collect(program, name & "[" & $index & "]", element, uniforms)
 
     else:
       {.error: "Unsupported uniform type: " & $U.}

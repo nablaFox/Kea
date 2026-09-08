@@ -258,6 +258,12 @@ proc clear*[
 ) =
   target.use()
 
+  when K in {BackBuffer, ColorDepth, DepthOnly}:
+    var depthWrite: GLboolean
+    glGetBooleanv(GL_DEPTH_WRITEMASK, addr depthWrite)
+    glDepthMask(true)
+    defer: glDepthMask(depthWrite)
+
   when K in {BackBuffer, ColorDepth}:
     glClearColor(color.r, color.g, color.b, 1.0'f)
     glClearDepth(depth.GLdouble)
