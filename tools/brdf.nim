@@ -6,11 +6,11 @@ type
     sample(brdf, Vec3, Vec2) is Vec3
 
 proc average*(brdf: Brdf, wo: Vec3, resolution: Natural): tuple[
-  direction: Vec3, 
-  fresnel: float32, 
+  direction: Vec3,
+  fresnel: float32,
   magnitude: float32,
-] = 
-  var 
+] =
+  var
     direction = vec3(0.0)
     magnitude = 0.0'f
     fresnel = 0.0'f
@@ -33,7 +33,7 @@ proc average*(brdf: Brdf, wo: Vec3, resolution: Natural): tuple[
         direction += wi * weight;
         magnitude += weight;
         fresnel += weight * (1.0 - max(dot(wo, H), 0.0'f))^5
-    
+
   direction.y = 0.0
 
   let samples = (resolution * resolution).float32
@@ -72,7 +72,7 @@ proc nearNormal(v: Vec3): bool {.inline} =
   abs(v.y) < 1e-6'f and
   abs(v.z - 1.0'f) < 1e-6'f
 
-proc aproximation(matrix: Mat3, wi: Vec3): float32 = 
+proc aproximation(matrix: Mat3, wi: Vec3): float32 =
   let inverse = matrix.inverse
 
   let p = inverse * wi
@@ -80,7 +80,7 @@ proc aproximation(matrix: Mat3, wi: Vec3): float32 =
   let length = p.length
 
   if length < 1e-7'f:
-    return 0.0'f 
+    return 0.0'f
 
   let source = p / length
 
@@ -106,14 +106,14 @@ proc sampleLtc(matrix: Mat3, U: Vec2): Vec3 {.inline.} =
   (matrix * source).normalize
 
 proc error(
-  brdf: Brdf, 
-  matrix: Mat3, 
+  brdf: Brdf,
+  matrix: Mat3,
   wo: Vec3,
   magnitude: float32,
   resolution: Natural
-): float32 = 
+): float32 =
   proc accumulate(wi: Vec3): float32 =
-    let 
+    let
       (valueBrdf, pdfBrdf) = brdf.eval(wi, wo)
 
       pdfLtc = matrix.aproximation(wi)
@@ -135,26 +135,26 @@ proc error(
         (i.float32 + 0.5'f) / resolution.float32,
         (j.float32 + 0.5'f) / resolution.float32
       ]
-      
+
       # LTC importance sampling
       result += accumulate(matrix.sampleLtc(U))
 
-      # BRDF importance sampling 
+      # BRDF importance sampling
       result += accumulate(brdf.sample(wo, U))
 
   result /= (resolution * resolution).float32
 
 
 proc fit*(
-  brdf: Brdf, 
-  wo: Vec3, 
+  brdf: Brdf,
+  wo: Vec3,
   resolution: Natural,
   initialScale = 1.0'f
 ): tuple[
   matrix: Mat3,
   fresnel: float32,
   magnitude: float32,
-] = 
+] =
   let (direction, fresnel, magnitude) = brdf.average(wo, resolution)
 
   if magnitude < 1e-7'f:
@@ -205,7 +205,7 @@ proc fit*(
       basis * params.anisotropicShape
 
   (
-    matrix: matrix, 
-    fresnel: fresnel, 
+    matrix: matrix,
+    fresnel: fresnel,
     magnitude: magnitude
   )

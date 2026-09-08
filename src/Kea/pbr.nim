@@ -30,13 +30,11 @@ type
     metallic: float32 = 0.0,
   ]
 
-  PBRItem = ref object
-    mesh: Mesh
-    topology: Topology
-    transform: Transform
-    material: PBRMaterial 
+  PBRItem* = ref object
+    renderable*: Renderable
+    material: PBRMaterial
 
-  PBRVert = proc(
+  PBRVert* = proc(
     vert: Vertex,
     model: Mat4,
     nmat: Mat3,
@@ -63,7 +61,7 @@ type
     vertices: array[5, Vec3]
     count: int
 
-const 
+const
   Red* = (
     albedo: [1.0, 0.0, 0.0],
     roughness: 0.5,
@@ -85,7 +83,7 @@ proc vert*(
   pos: Vec4,
   worldNormal: Vec3,
   worldPosition: Vec3
-] = 
+] =
   let P = model * vert.position.hom
 
   result.pos = proj * view * P
@@ -102,7 +100,7 @@ proc frag*(
   light: RectLight,
   ltcInverseMatrixLut: Texture[Rgba32Float],
   ltcMagnitudeFresnelLut: Texture[Rg32Float]
-): tuple[pixel: Vec4] = 
+): tuple[pixel: Vec4] =
   # TODO: add shader support for defining polygon here
 
   proc clipAgainstHorizon(vertices: array[4, Vec3]): Polygon =
@@ -174,23 +172,23 @@ proc frag*(
   proc texelCenteredUv(size: Vec2, x, y: float32): Vec2 =
     ([x, y] * (size - 1.0'f) + 0.5'f) / size
 
-  let 
+  let
     P = worldPosition
     V = (eye - P).normalize
     N = worldNormal.normalize.face(V)
     NdotV = dot(N, V)
-  
+
   let
     uv = ltcInverseMatrixLut.size.texelCenteredUv(
       roughness,
       (1 - clamp(NdotV, 0, 1)).sqrt
     )
-    
+
     shape = ltcInverseMatrixLut.sample(uv)
     terms = ltcMagnitudeFresnelLut.sample(uv).xy
 
   let
-    corners = light.corners 
+    corners = light.corners
     specularIntegral = integrateRect(
       P, N, V,
       corners,
@@ -210,12 +208,12 @@ proc frag*(
     F0 = mix(vec3(0.04), albedo, metallic)
     specularScale = F0 * terms.x + (1 - F0) * terms.y
     specular = specularScale * specularIntegral
- 
-  let 
+
+  let
     diffuseColor = albedo * (1.0 - metallic)
     diffuse = diffuseColor * diffuseIntegral
 
-  let 
+  let
     radiance = light.radiance * (specular + diffuse)
     ambient = 0.03 * albedo
 
@@ -224,44 +222,40 @@ proc frag*(
     .gamma
     .hom
 
-template new*(kea: Kea, vert: PBRVert): PBR =
-  block:
-    let
-      context = kea
+proc new*(kea: Kea): PBR =
+  let
+    context = kea
 
-      ltcInverseMatrixLut = texture.new(
-        context,
-        ltc.InverseMatrixData,
-        ltc.LutSize,
-        ltc.LutSize,
-        Rgba32Float,
-        LinearTextureOptions
-      )
-
-      ltcMagnitudeFresnelLut = texture.new(
-        context,
-        ltc.MagnitudeFresnelData,
-        ltc.LutSize,
-        ltc.LutSize,
-        Rg32Float,
-        LinearTextureOptions
-      )
-
-      lighting = renderer.new(
-        context,
-        vert,
-        frag,
-        globals = PBRGlobals,
-      )
-
-    PBR(
-      ltcInverseMatrixLut: ltcInverseMatrixLut,
-      ltcMagnitudeFresnelLut: ltcMagnitudeFresnelLut,
-      lighting: lighting
+    ltcInverseMatrixLut = texture.new(
+      context,
+      ltc.InverseMatrixData,
+      ltc.LutSize,
+      ltc.LutSize,
+      Rgba32Float,
+      LinearTextureOptions
     )
-  
-proc new*(kea: Kea): PBR = 
-  new(kea, vert)
+
+    ltcMagnitudeFresnelLut = texture.new(
+      context,
+      ltc.MagnitudeFresnelData,
+      ltc.LutSize,
+      ltc.LutSize,
+      Rg32Float,
+      LinearTextureOptions
+    )
+
+    lighting = renderer.new(
+      context,
+      vert,
+      frag,
+      globals = PBRGlobals,
+    )
+
+  PBR(
+    ltcInverseMatrixLut: ltcInverseMatrixLut,
+    ltcMagnitudeFresnelLut: ltcMagnitudeFresnelLut,
+    lighting: lighting
+  )
 
 proc render*(
   pbr: PBR,
@@ -271,11 +265,9 @@ proc render*(
 ) =
   let lightingItems = collect:
     for source in pbr.items.values:
-      item.new(
-        source.mesh,
-        source.transform,
-        material = source.material,
-        topology = source.topology
+      RenderItem[PBRMaterial](
+        renderable: source.renderable,
+        material: source.material
       )
 
   pbr.lighting.render(
@@ -296,14 +288,22 @@ proc add*(
   key: string,
   mesh: Mesh,
   transform: Transform,
-  material: PBRMaterial = PBRMaterial.default,
-  topology: Topology = Triangles
+  topology: Topology = Triangles,
+  albedo: Vec3 = [1.0, 1.0, 1.0],
+  roughness: float32 = 0.5,
+  metallic: float32 = 0.0
 ): PBRItem =
   result = PBRItem(
-    mesh: mesh,
-    topology: topology,
-    transform: transform,
-    material: material,
+    renderable: Renderable(
+      mesh: mesh,
+      topology: topology,
+      transform: transform
+    ),
+    material: (
+      albedo: albedo,
+      roughness: roughness,
+      metallic: metallic
+    )
   )
 
   pbr.items[key] = result
@@ -312,7 +312,9 @@ proc add*(
   pbr: PBR,
   key: string,
   mesh: Mesh,
-  material: PBRMaterial = PBRMaterial.default,
+  albedo: Vec3 = [1.0, 1.0, 1.0],
+  roughness: float32 = 0.5,
+  metallic: float32 = 0.0,
   x: float32 = 0.0,
   y: float32 = 0.0,
   z: float32 = 0.0,
@@ -334,8 +336,10 @@ proc add*(
       roll = roll,
       scale = scale,
     ),
-    material = material,
     topology = topology,
+    albedo = albedo,
+    roughness = roughness,
+    metallic = metallic
   )
 
 proc remove*(

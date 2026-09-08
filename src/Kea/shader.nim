@@ -1,7 +1,7 @@
-import 
-  math, 
-  mesh, 
-  texture, 
+import
+  math,
+  mesh,
+  texture,
   colors,
   std/[macros, sequtils, strutils, math]
 
@@ -37,7 +37,7 @@ iterator fields(node: NimNode): Parameter =
     if definition.kind == nnkIdentDefs:
       for index in 0 ..< definition.len - 2:
         yield (
-          name: definition[index], 
+          name: definition[index],
           typ: definition[^2]
         )
 
@@ -193,7 +193,7 @@ proc glslType(typ: NimNode): string =
 
 proc glslOperator(operator: NimNode): string =
   case operator.strVal:
-  of "+", "-", "*", "/", "+=", "-=", 
+  of "+", "-", "*", "/", "+=", "-=",
      "*=", "/=", "<=", ">=", "<", ">",
      "!=", "==":
     operator.strVal
@@ -294,7 +294,7 @@ proc structTypes(roots: openArray[NimNode]): seq[NimNode] =
   structs
 
 proc emitUsedStructs(
-  shader: NimNode, 
+  shader: NimNode,
   helpers: openArray[NimNode]
 ): string =
   proc emitStructDef(struct: NimNode): string =
@@ -303,12 +303,12 @@ proc emitUsedStructs(
     result.add "struct " & struct.repr & " {\n"
 
     for field in impl[^1].fields:
-      result.add "  " & 
+      result.add "  " &
         declaration(field.typ, field.name.strVal)
 
     result.add "};\n\n"
 
-  var roots: seq[NimNode] 
+  var roots: seq[NimNode]
 
   roots.add shader.signature.rootTypes
 
@@ -354,6 +354,7 @@ proc intrinsicName(symbol: NimNode): string =
     (bindSym"min", "min"),
     (bindSym"cross", "cross"),
     (bindSym"transpose", "transpose"),
+    (bindSym"floorMod", "mod"),
   ]:
     if intrinsic.kind in {nnkOpenSymChoice, nnkClosedSymChoice}:
       for overload in intrinsic:
@@ -470,14 +471,14 @@ proc emitBody(
         result = "mat4(1.0)"
 
       elif node.symKind == nskConst:
-        let 
+        let
           impl = node.getImpl
           value =
             if impl.kind == nnkConstDef: impl[^1]
             else: impl
 
         return value.emitExpr(
-          parentPrecedence, 
+          parentPrecedence,
           isRightOperand
         )
 
@@ -492,11 +493,11 @@ proc emitBody(
       let field = node[1].strVal
 
       if isShaderMain and node[0].eqIdent("result"):
-        result = 
-          if field == "pos": "gl_Position" 
+        result =
+          if field == "pos": "gl_Position"
           else: field
 
-      elif isShaderMain and 
+      elif isShaderMain and
         sameType(node[0].getTypeImpl, bindSym"Vertex"):
         result = "vert" & field.capitalizeAscii
 
@@ -534,7 +535,7 @@ proc emitBody(
           error "statements inside expressions are not supported yet", node
 
       return node[^1].emitExpr(
-        parentPrecedence, 
+        parentPrecedence,
         isRightOperand
       )
 
@@ -548,7 +549,7 @@ proc emitBody(
     of nnkInfix:
       let operator = node[0].glslOperator
 
-      result = node[1].emitExpr(node.precedence) & 
+      result = node[1].emitExpr(node.precedence) &
         " " & operator & " " &
         node[2].emitExpr(node.precedence, true)
 
@@ -573,10 +574,10 @@ proc emitBody(
 
       result.add ")"
 
-    of nnkHiddenStdConv, nnkHiddenSubConv, 
+    of nnkHiddenStdConv, nnkHiddenSubConv,
       nnkHiddenAddr, nnkHiddenDeref:
       return node[^1].emitExpr(
-        parentPrecedence, 
+        parentPrecedence,
         isRightOperand
       )
 
@@ -844,8 +845,8 @@ proc emitHelper(helper: NimNode): string =
   result.add "}\n"
 
 proc emitMain(body: NimNode): string =
-  "\nvoid main() {\n" & 
-  body.emitBody(isShaderMain = true) & 
+  "\nvoid main() {\n" &
+  body.emitBody(isShaderMain = true) &
   "}"
 
 proc validateOutputType(typ: NimNode) =
@@ -892,8 +893,8 @@ proc vertGlslImpl*(shader: NimNode): string =
     if field.name.strVal == "pos":
       continue
 
-    let qualifier = 
-      if sameType(typ, bindSym"int32"): "flat out " 
+    let qualifier =
+      if sameType(typ, bindSym"int32"): "flat out "
       else: "out "
 
     result.add qualifier & declaration(typ, field.name.strVal)

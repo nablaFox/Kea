@@ -8,7 +8,7 @@ type
 
     width: int32
     height: int32
-   
+
     mouse: Mouse
     keyboard: Keyboard
 

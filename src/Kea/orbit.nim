@@ -29,13 +29,13 @@ proc new*(
   )
 
 proc update*(
-  orbit: var OrbitController, 
+  orbit: var OrbitController,
   delta: float32,
   mouse: Mouse,
   keyboard: Keyboard,
   rotationSensitivity: float32 = 1.0'f,
   panSensitivity: float32 = 1.0'f
-) = 
+) =
   if keyboard.pressed(Home):
     orbit.target = orbit.home
     orbit.yaw = 0.0'f
@@ -44,7 +44,7 @@ proc update*(
   let t = 1.0'f - exp(-12.0'f * delta)
 
   let distance = block:
-    let 
+    let
       currDistance = (orbit.camera.positioned - orbit.target).length
       smoothDistance = lerp(currDistance, orbit.distance, t)
 
@@ -69,7 +69,7 @@ proc update*(
   let rotation = orbit.yaw.yaw * orbit.pitch.pitch
 
   orbit.distance *= 0.85 ^ mouse.scroll.y
- 
+
   orbit.camera.position = orbit.target + (rotation * WorldBackward) * distance
 
   orbit.camera.rotation = rotation
@@ -77,6 +77,6 @@ proc update*(
 proc update*(orbit: var OrbitController, frame: Frame) =
   orbit.update(
     delta = frame.delta,
-    mouse = frame.mouse, 
+    mouse = frame.mouse,
     keyboard = frame.keyboard
   )

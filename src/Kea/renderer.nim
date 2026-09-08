@@ -1,9 +1,9 @@
-import 
-  mesh, 
-  program, 
-  shader, 
-  transform, 
-  math, 
+import
+  mesh,
+  program,
+  shader,
+  transform,
+  math,
   target,
   texture,
   core,
@@ -32,7 +32,7 @@ type
     G: tuple;
     M: tuple;
     A: tuple;
-  ] = 
+  ] =
     ref RendererObj[G, M, A]
 
   CullMode* = enum
@@ -64,7 +64,7 @@ proc newFromSources[G: tuple; M: tuple; A: tuple](
 
   result.program = program.new(
     kea,
-    vertexSource, 
+    vertexSource,
     fragmentSource
   )
 
@@ -79,7 +79,7 @@ macro new*(
   vert, frag: typed,
   globals: typedesc[tuple] = tuple[]
 ): untyped =
-  let 
+  let
     M = materialType(vert, frag, globals.getTypeInst[1])
     A = attachmentsType(frag)
     vs = vertGlslImpl(vert)
@@ -130,7 +130,7 @@ proc render*[
   target: RenderTarget[K, Atts],
   items: openArray[RenderItem[M]],
   globals: G = G.default,
-  cullMode: CullMode = CullBack,
+  cullMode: CullMode = CullDisabled,
   depthTest: DepthTest = DepthLess,
   depthWrite: bool = true
 ) =
@@ -190,7 +190,7 @@ proc render*[
   renderer.globalUniforms.set(globals)
 
   for item in items:
-    let 
+    let
       renderable = item.renderable
       model = renderable.transform.model
       nmat = model.normalMatrix
@@ -211,7 +211,7 @@ proc render*[
   target: RenderTarget[K, Atts],
   item: RenderItem[M],
   globals: G = G.default,
-  cullMode: CullMode = CullBack,
+  cullMode: CullMode = CullDisabled,
   depthTest: DepthTest = DepthLess,
   depthWrite: bool = true
 ) =

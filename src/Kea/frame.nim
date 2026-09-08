@@ -23,14 +23,14 @@ iterator frames*(kea: Kea): Frame =
   while not kea.shouldClose:
     let currentTime = glfwGetTime()
 
-    let 
+    let
       delta = (currentTime - previousTime).float32
       time = (currentTime - startTime).float32
       fps = if delta > 0.0: 1.0 / delta else: 0.0
 
     kea.poll()
 
-    let 
+    let
       keyboard = kea.keyboard
       mouse = kea.mouse
 

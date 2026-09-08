@@ -2,7 +2,7 @@ import std/math
 
 export math
 
-type 
+type
   Vec*[C: static int] = array[C, float32]
   Matrix*[R, C: static int] = array[R, Vec[C]]
 
@@ -101,7 +101,7 @@ proc dot*[C: static int](a: Vec[C], b: Vec[C]): float32 =
   for i in 0..<C:
     result += a[i] * b[i]
 
-proc normalize*[C: static int](v: Vec[C]): Vec[C] = 
+proc normalize*[C: static int](v: Vec[C]): Vec[C] =
   let length = sqrt(dot(v, v))
 
   if length > 1e-7'f: v / length else: vec[C](0.0)
@@ -241,9 +241,9 @@ proc normalMatrix*(model: Mat4): Mat3 =
 
   for row in 0..<3:
     for col in 0..<3:
-      result[row][col] = mat[row][col]  
+      result[row][col] = mat[row][col]
 
-proc pitch*(value: float32): Mat3 = 
+proc pitch*(value: float32): Mat3 =
   let cp = cos(value)
   let sp = sin(value)
 

@@ -7,7 +7,7 @@ const WorldUp*: Vec3 = [0.0, 1.0, 0.0]
 const WorldRight*: Vec3 = [1.0, 0.0, 0.0]
 const WorldLeft*: Vec3 = [-1.0, 0.0, 0.0]
 
-type 
+type
   CameraKind* = enum
     Perspective
     Orthographic
@@ -23,11 +23,11 @@ type
   Camera* = ref CameraObj
 
 proc new*(
-  kind: CameraKind, 
-  fov = 60.0'f, 
-  near = 0.1'f, 
-  far = 100.0'f, 
-  size = 10.0'f, 
+  kind: CameraKind,
+  fov = 60.0'f,
+  near = 0.1'f,
+  far = 100.0'f,
+  size = 10.0'f,
   transform = Identity
 ): Camera =
   Camera(
@@ -65,7 +65,7 @@ proc right*(camera: Camera): Vec3 =
 proc up*(camera: Camera): Vec3 =
   camera.transform.rotation * WorldUp
 
-proc view*(camera: Camera): Mat4 = 
+proc view*(camera: Camera): Mat4 =
   let rotTransposed = camera
     .transform
     .rotMatrix

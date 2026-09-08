@@ -123,7 +123,7 @@ proc glfwKey*(key: Key): int32 =
   of W: int32(GLFWKey.W)
   of X: int32(GLFWKey.X)
   of Y: int32(GLFWKey.Y)
-  of Z: int32(GLFWKey.Z) 
+  of Z: int32(GLFWKey.Z)
   of Zero: int32(GLFWKey.K0)
   of One: int32(GLFWKey.K1)
   of Two: int32(GLFWKey.K2)

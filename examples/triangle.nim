@@ -7,18 +7,18 @@ import Kea
 let
   kea = init(
     title = "triangle",
-    width = 800, 
-    height = 600, 
+    width = 800,
+    height = 600
   )
 
   renderer = renderer.new(
     kea,
 
-    vert = proc(vert: Vertex): tuple[pos: Vec4] = 
+    vert = proc(vert: Vertex): tuple[pos: Vec4] =
       result.pos = vert.position.hom,
 
     frag = proc(color: Color): tuple[pixel: Vec4] =
-      result.pixel = color.hom  
+      result.pixel = color.hom
   )
 
   allocator = allocator.new(kea)
@@ -33,8 +33,8 @@ for frame in kea.frames:
     break
 
   triangle.material.color = [
-    frame.time.sin, 
-    frame.time.cos, 
+    frame.time.sin,
+    frame.time.cos,
     0.5
   ]
 

@@ -1,15 +1,15 @@
-import 
+import
   Kea/[
-    core, 
+    core,
     frame,
     pbr,
-    renderer, 
-    math, 
+    renderer,
+    math,
     target,
-    primitives, 
-    transform, 
-    camera, 
-    mesh, 
+    primitives,
+    transform,
+    camera,
+    mesh,
     input,
     colors,
     orbit,
@@ -20,17 +20,17 @@ import
     resources
   ]
 
-export 
+export
   target,
-  core, 
+  core,
   frame,
-  renderer, 
-  math, 
-  primitives, 
-  transform, 
-  camera, 
+  renderer,
+  math,
+  primitives,
+  transform,
+  camera,
   pbr,
-  mesh, 
+  mesh,
   input,
   colors,
   orbit,

@@ -21,7 +21,7 @@ type
     Rgb32Float
     Rgba32Float
     Depth24
-    Depth32Float 
+    Depth32Float
 
   TextureObj[F: static TextureFormat] = object
     id: GLuint
@@ -247,7 +247,7 @@ proc new*(
   doAssert data.len > 0
 
   const bytesPerComponent =
-    if format in {Rgba8Linear, Rgba8Srgb}: 1 
+    if format in {Rgba8Linear, Rgba8Srgb}: 1
     else: 4
 
   doAssert data.len == width * height * format.components * bytesPerComponent,
@@ -278,10 +278,10 @@ proc new*(
 
   createTexture[format](
     kea,
-    addr data[0], 
-    width, 
-    height, 
-    format.info, 
+    addr data[0],
+    width,
+    height,
+    format.info,
     options
   )
 
@@ -347,7 +347,7 @@ proc update*[F: static TextureFormat](
 proc update*[F: static TextureFormat](
   texture: Texture[F],
   data: pointer
-) = 
+) =
   texture.update(
     data,
     0,
@@ -359,7 +359,7 @@ proc update*[F: static TextureFormat](
 proc update*[F: static TextureFormat](
   texture: Texture[F],
   data: openArray[float32]
-) = 
+) =
   when F notin {R32Float, Rg32Float, Rgb32Float, Rgba32Float}:
     {.error: "Unsupported color format for float32 data".}
 
@@ -382,7 +382,7 @@ proc size*[F](texture: Texture[F]): array[2, float32] =
   [texture.width.float32, texture.height.float32]
 
 proc sample*(
-  tex: Texture, 
+  tex: Texture,
   uv: array[2, float32]
 ): array[4, float32] =
   discard

@@ -15,12 +15,12 @@ type
     kea: Kea
 
     allocator: MeshAllocator
-    
+
     meshes: Table[string, Mesh]
     textures: Table[string, RootRef]
     renderers: Table[string, RootRef]
 
-proc new*(kea: Kea): Resources = 
+proc new*(kea: Kea): Resources =
   Resources(
     kea: kea,
     allocator: allocator.new(kea)
@@ -48,12 +48,27 @@ template cached(
       value = CacheEntry[T](entry).value
 
     value
-    
+
+template cached[T](
+  cache: var Table[string, T],
+  key: string,
+  create: untyped
+): T =
+  block:
+    let cacheKey = key
+    var value = cache.getOrDefault(cacheKey)
+
+    if value == nil:
+      value = create
+      cache[cacheKey] = value
+
+    value
+
 proc mesh*(
   res: Resources,
   primitive: Primitive,
   cached: bool = true
-): Mesh = 
+): Mesh =
   if not cached:
     return res.allocator.mesh(primitive)
 
@@ -64,6 +79,18 @@ proc mesh*(
   if result == nil:
     result = res.allocator.mesh(primitive)
     res.meshes[key] = result
+
+proc mesh*(
+  res: Resources,
+  key: string,
+  vertices: openArray[Vertex],
+  indices: openArray[Index]
+): Mesh =
+  cached(
+    res.meshes,
+    key,
+    mesh.new(res.allocator, vertices, indices)
+  )
 
 proc texture*(
   res: Resources,

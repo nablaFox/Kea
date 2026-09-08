@@ -20,8 +20,8 @@ proc `=destroy`(program: var ProgramObj) =
     program.kea = nil
 
 proc new*(
-  kea: Kea, 
-  vert: string, 
+  kea: Kea,
+  vert: string,
   frag: string
 ): Program =
   proc compile(kind: GLenum, source: string): GLuint =
@@ -40,7 +40,7 @@ proc new*(
       glGetShaderInfoLog(result, 512, nil, log.cstring)
       quit("Shader compilation failed:\n" & log)
 
-  let 
+  let
     vertexShader = compile(GL_VERTEX_SHADER, vert)
     fragmentShader = compile(GL_FRAGMENT_SHADER, frag)
 
@@ -149,9 +149,9 @@ proc set*(uniform: Uniform, value: Mat4) =
   checkType(uniform, value)
   glUniformMatrix4fv(uniform.location, 1, true, addr value[0][0])
 
-proc set*(uniform: Uniform, value: Mat3) = 
+proc set*(uniform: Uniform, value: Mat3) =
   checkType(uniform, value)
-  glUniformMatrix3fv(uniform.location, 1, true, addr value[0][0]) 
+  glUniformMatrix3fv(uniform.location, 1, true, addr value[0][0])
 
 proc setTexture[F: static TextureFormat](
   uniform: Uniform,

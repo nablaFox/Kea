@@ -1,6 +1,6 @@
 import Kea, std/[random, sequtils]
 
-type 
+type
   Mcml = object
     resolution: Natural
     absorption: float32
@@ -31,18 +31,18 @@ proc new(
     diffuse: newSeq[float32](resolution * resolution)
   )
 
-proc update(mcml: var Mcml, photons: Natural) = 
-  let 
+proc update(mcml: var Mcml, photons: Natural) =
+  let
     N = mcml.resolution
     depth = mcml.depth
     absorption = mcml.absorption
     scattering = mcml.scattering
     anisotropy = mcml.anisotropy
     size = mcml.size
-    
+
   for i in 0..<photons:
     let (weight, pos, dir) = block:
-      var 
+      var
         weight = 1.0'f
         pos = [0.0'f, 0.0, 0.0]
         dir = [0.0'f, 0.0, 1.0]
@@ -50,7 +50,7 @@ proc update(mcml: var Mcml, photons: Natural) =
       let q = absorption / (absorption + scattering)
 
       while true:
-        let boundary = 
+        let boundary =
           if dir.z > 0: (depth - pos.z) / dir.z
           elif dir.z < 0: - pos.z / dir.z
           else: Inf.float32
@@ -67,7 +67,7 @@ proc update(mcml: var Mcml, photons: Natural) =
         weight *= (1 - q)
 
         # sampled from Henyey-Greenstein
-        let cosTheta = 
+        let cosTheta =
           if anisotropy == 0: 2 * rand(1.0) - 1
           else:
             let g = anisotropy
@@ -75,17 +75,17 @@ proc update(mcml: var Mcml, photons: Natural) =
 
             (1 + g^2 - ((1 - g^2) / (1 - g + 2*g*r))^2) / (2*g)
 
-        let 
+        let
           phi = 2 * PI * rand(1.0)
 
           theta = arccos cosTheta.clamp(-1.0'f, 1.0'f)
 
         dir = dir.rotate(theta, phi).normalize
 
-      (weight: weight, pos: pos, dir: dir) 
+      (weight: weight, pos: pos, dir: dir)
 
     # mappping [-size/2, size/2] x [-size/2, size/2] -> [0, N] x [0, N]
-    let 
+    let
       i = int(N.float32 * (pos.x + size / 2) / size)
       j = int(N.float32 * (pos.y + size / 2) / size)
 
@@ -100,7 +100,7 @@ proc update(mcml: var Mcml, photons: Natural) =
   mcml.photons += photons.uint32
 
 proc render(
-  mcml: Mcml, 
+  mcml: Mcml,
   res: Resources,
   target: RenderTarget,
   camera: Camera,
@@ -110,7 +110,7 @@ proc render(
   yaw: float32 = 0.0,
   pitch: float32 = 0.0,
   roll: float32 = 0.0
-) = 
+) =
   proc vert(
     vert: Vertex,
     model: Mat4, nmat: Mat3,
@@ -136,17 +136,17 @@ proc render(
     size: float32,
   ): tuple[pixel: Vec4] =
     proc density(tex: Texture[R32Float], uv: Vec2): float32 =
-      let 
+      let
         res = tex.size
 
-        texelArea = (size / res.x.float32) * 
+        texelArea = (size / res.x.float32) *
           (size / res.y.float32)
 
       tex.sample(uv).r / (photons.float32 * texelArea)
 
     let color =
       if objectNormal.x > 0.99:
-        let 
+        let
           color = [0.20'f, 0.65, 0.95]
 
           density = transmittance.density(uv)
@@ -154,7 +154,7 @@ proc render(
         tonemap.exponential(color * density)
 
       elif objectNormal.x < -0.99:
-        let 
+        let
           color = [0.35'f, 0.55, 1.0]
 
           density = diffuse.density(uv)
@@ -162,7 +162,7 @@ proc render(
         tonemap.exponential(color * density)
 
       else:
-        let 
+        let
           N = worldNormal.normalize
           L = [0.4'f, 0.8, 0.6].normalize
           ndotl = max(dot(N, L), 0.0)
@@ -173,6 +173,24 @@ proc render(
     result.pixel = color.gamma.hom
 
   let
+    transmittance = res.texture(
+      "mcml/transmittance",
+      data = mcml.transmittance,
+      width = mcml.resolution,
+      height = mcml.resolution,
+      format = R32Float,
+      DataTextureOptions
+    )
+
+    diffuse = res.texture(
+      "mcml/diffuse",
+      data = mcml.diffuse,
+      width = mcml.resolution,
+      height = mcml.resolution,
+      format = R32Float,
+      DataTextureOptions
+    )
+
     globals = (
       view: camera.view,
       proj: camera.proj target.aspect,
@@ -180,24 +198,6 @@ proc render(
       diffuse: diffuse,
       photons: mcml.photons,
       size: mcml.size
-    )
-
-    transmittance = res.texture(
-      "mcml/transmittance",
-      data = mcml.transmittance,
-      width = mcml.resolution, 
-      height = mcml.resolution, 
-      format = R32Float,
-      DataTextureOptions
-    ) 
-
-    diffuse = res.texture(
-      "mcml/diffuse",
-      data = mcml.diffuse,
-      width = mcml.resolution, 
-      height = mcml.resolution, 
-      format = R32Float,
-      DataTextureOptions
     )
 
     renderer = res.renderer(
@@ -216,8 +216,8 @@ proc render(
       pitch = pitch,
       roll = roll,
       scale = [
-        mcml.depth, 
-        mcml.size, 
+        mcml.depth,
+        mcml.size,
         mcml.size
       ] * 0.5'f
     )
@@ -228,17 +228,17 @@ proc render(
     globals = globals
   )
 
-let 
+let
   kea = init(
     title = "mcml",
-    width = 1920, 
-    height = 1080, 
+    width = 800,
+    height = 600,
     cursor = Disabled
   )
 
   res = resources.new(kea)
 
-var 
+var
   mcml = new(
     resolution = 512,
     depth = 0.03'f,
@@ -250,7 +250,7 @@ var
 
   orbit = orbit.new(
     camera.new(Perspective),
-    target = [0.0'f, 1.0, 0.0], 
+    target = [0.0'f, 1.0, 0.0],
     distance = 1.0
   )
 
@@ -267,8 +267,8 @@ for frame in kea.frames:
   frame.backbuffer.clear(color = White * 0.1)
 
   mcml.render(
-    res, 
-    frame.backbuffer, 
+    res,
+    frame.backbuffer,
     orbit.camera,
     yaw = -(PI / 2.0),
     y = 1.0

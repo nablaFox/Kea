@@ -6,11 +6,11 @@ const
   N = ltc.LutSize
   Total = N * N
 
-type 
+type
   GgxBrdf = object
     alpha: float32
 
-proc sample(ggx: GgxBrdf, wo: Vec3, u: Vec2): Vec3 = 
+proc sample(ggx: GgxBrdf, wo: Vec3, u: Vec2): Vec3 =
   let phi = 2.0'f * PI.float32 * u.x
 
   let radius = ggx.alpha * sqrt(u.y / (1.0'f - u.y))
@@ -22,7 +22,7 @@ proc sample(ggx: GgxBrdf, wo: Vec3, u: Vec2): Vec3 =
   return wi
 
 proc eval(ggx: GgxBrdf, wi, wo: Vec3): tuple[
-  value: float32, 
+  value: float32,
   pdf: float32
 ] =
   if wo.z <= 0.0'f:
@@ -79,12 +79,12 @@ for viewIndex in 0 ..< N:
 
     let view = [sin(theta).float32, 0.0, cos(theta).float32]
 
-    let alpha = max((roughnessIndex / (N - 1))^2, 0.00001) 
+    let alpha = max((roughnessIndex / (N - 1))^2, 0.00001)
 
     let fit = brdf.fit(
-      GgxBrdf(alpha: alpha), 
-      view, 
-      resolution = 128, 
+      GgxBrdf(alpha: alpha),
+      view,
+      resolution = 128,
       initialScale = min(1.0'f, 2.0'f * alpha)
     )
 

@@ -15,8 +15,8 @@ type
     vertexCapacity: uint32
     indexCapacity: uint32
 
-proc upload(mesh: Mesh) = 
-  let 
+proc upload(mesh: Mesh) =
+  let
     vertices = mesh.vertices
     indices = mesh.indices
 
@@ -41,8 +41,8 @@ proc upload(mesh: Mesh) =
   )
 
 proc new*(
-  allocator: MeshAllocator, 
-  vertices: openArray[Vertex], 
+  allocator: MeshAllocator,
+  vertices: openArray[Vertex],
   indices: openArray[Index]
 ): Mesh =
   let (vertexOffset, indexOffset) = allocator.allocate(
@@ -63,8 +63,8 @@ proc new*(
   upload(result)
 
 proc update*(
-  mesh: Mesh, 
-  vertices: sink seq[Vertex], 
+  mesh: Mesh,
+  vertices: sink seq[Vertex],
   indices: sink seq[Index]
 ) =
   doAssert vertices.len.uint32 <= mesh.vertexCapacity
@@ -97,18 +97,12 @@ proc setVertex*(mesh: Mesh, index: Natural, vertex: Vertex) =
   upload(mesh)
 
 proc update*(
-  mesh: Mesh, 
+  mesh: Mesh,
   positions: openArray[Vec3]
 )
   {.error: "not implemented".} = discard
 
-proc glMode(topology: Topology): GLenum =
-  case topology
-  of Triangles: GL_TRIANGLES
-  of Lines: GL_LINES
-  of Points: GL_POINTS
-
-proc draw*(mesh: Mesh, topology: Topology) = 
+proc draw*(mesh: Mesh, topology: Topology) =
   mesh.allocator.use()
 
   glDrawElementsBaseVertex(
