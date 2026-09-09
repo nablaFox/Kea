@@ -10,13 +10,14 @@ and professional studio.
 - Gamma correction (ok)
 - Area light (ok)
 - Dynamic shadows
+- Multiple scattering energy compensation
 - Diffuse IBL
 - Specular IBL
 - GTAO
-- Multiple scattering energy compensation
 - Lagarde specular AO
-- horizon specular occlusion
-- Anisotropic BDRF
+- Single dielectric transmission
+- Stacked dielectric transmission
+- SSS
 
 ## References
 
@@ -43,4 +44,8 @@ Dynamic shadows:
 Others:
 
 - https://blog.selfshadow.com/publications/s2017-shading-course/imageworks/s2017_pbs_imageworks_slides_v2.pdf
+- https://eheitzresearch.wordpress.com/240-2/
+- https://blog.selfshadow.com/publications/turquin/ms_comp_final.pdf
+- https://jcgt.org/published/0008/01/03/
 - http://www.lighthouse3d.com/tutorials/glsl-tutorial/the-normal-matrix/
+- https://google.github.io/filament/main/filament.html#improving-the-brdfs
