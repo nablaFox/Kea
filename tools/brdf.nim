@@ -5,10 +5,14 @@ type
     eval(brdf, Vec3, Vec3) is tuple[value: float32, pdf: float32]
     sample(brdf, Vec3, Vec2) is Vec3
 
-proc average*(brdf: Brdf, wo: Vec3, resolution: Natural): tuple[
+proc average*(
+  brdf: Brdf,
+  wo: Vec3,
+  resolution: Natural
+): tuple[
   direction: Vec3,
   fresnel: float32,
-  magnitude: float32,
+  magnitude: float32
 ] =
   var
     direction = vec3(0.0)
@@ -45,12 +49,13 @@ proc average*(brdf: Brdf, wo: Vec3, resolution: Natural): tuple[
   )
 
 proc anisotropicShape(params: Vec3): Mat3 {.inline} =
-  let x = params.x
-  let b = params.y
-  let z = params.z
+  let
+    x = params.x
+    b = params.y
+    z = params.z
 
-  let a = exp(x)
-  let c = exp(z)
+    a = exp(x)
+    c = exp(z)
 
   [
     [a,   0.0, b],
@@ -73,11 +78,12 @@ proc nearNormal(v: Vec3): bool {.inline} =
   abs(v.z - 1.0'f) < 1e-6'f
 
 proc aproximation(matrix: Mat3, wi: Vec3): float32 =
-  let inverse = matrix.inverse
+  let
+    inverse = matrix.inverse
 
-  let p = inverse * wi
+    p = inverse * wi
 
-  let length = p.length
+    length = p.length
 
   if length < 1e-7'f:
     return 0.0'f
@@ -144,7 +150,6 @@ proc error(
 
   result /= (resolution * resolution).float32
 
-
 proc fit*(
   brdf: Brdf,
   wo: Vec3,
@@ -153,9 +158,13 @@ proc fit*(
 ): tuple[
   matrix: Mat3,
   fresnel: float32,
-  magnitude: float32,
+  magnitude: float32
 ] =
-  let (direction, fresnel, magnitude) = brdf.average(wo, resolution)
+  let (
+    direction,
+    fresnel,
+    magnitude
+  ) = brdf.average(wo, resolution)
 
   if magnitude < 1e-7'f:
     return (

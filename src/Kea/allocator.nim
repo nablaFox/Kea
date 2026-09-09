@@ -22,7 +22,7 @@ type
     vertexCapacity: uint32
     indexCapacity: uint32
 
-  MeshAllocator* = 
+  MeshAllocator* =
     ref MeshAllocatorObj
 
 proc `=destroy`(allocator: var MeshAllocatorObj) =

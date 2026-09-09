@@ -24,7 +24,7 @@ proc new*(
     .allocate(
       vertexCount.uint32,
       indexCount.uint32
-    ) 
+    )
 
   Mesh(
     allocator: allocator,
@@ -33,34 +33,6 @@ proc new*(
     vertexCount: vertexCount,
     indexCount: indexCount
   )
-
-proc new*(
-  allocator: MeshAllocator,
-  positions: openArray[Vec3],
-  normals: openArray[Vec3],
-  indices: openArray[uint32],
-  uvs: openArray[Vec2] = [],
-  colors: openArray[Vec3] = []
-): Mesh =
-  let 
-    vertexCount = positions.len.Natural
-    indexCount = indices.len.Natural
-
-  doAssert normals.len == vertexCount
-  doAssert colors.len == 0 or colors.len == vertexCount
-  doAssert uvs.len == 0 or uvs.len == vertexCount
-
-  result = new(allocator, vertexCount, indexCount)
-
-  let
-    vertexOffset = result.vertexOffset
-    indexOffset = result.indexOffset
-
-  allocator.uploadPositions(vertexOffset, positions)
-  allocator.uploadNormals(vertexOffset, normals)
-  allocator.uploadColors(vertexOffset, colors)
-  allocator.uploadUvs(vertexOffset, uvs)
-  allocator.uploadIndices(indexOffset, indices)
 
 proc update*(
   mesh: Mesh,
@@ -87,6 +59,32 @@ proc update*(
   mesh.allocator.uploadColors(mesh.vertexOffset, colors)
   mesh.allocator.uploadUvs(mesh.vertexOffset, uvs)
   mesh.allocator.uploadIndices(mesh.indexOffset, indices)
+
+proc new*(
+  allocator: MeshAllocator,
+  positions: openArray[Vec3],
+  normals: openArray[Vec3],
+  indices: openArray[uint32],
+  uvs: openArray[Vec2] = [],
+  colors: openArray[Vec3] = []
+): Mesh =
+  let
+    vertexCount = positions.len.Natural
+    indexCount = indices.len.Natural
+
+  result = new(
+    allocator,
+    vertexCount,
+    indexCount
+  )
+
+  result.update(
+    positions,
+    normals,
+    colors,
+    uvs,
+    indices
+  )
 
 proc glMode*(topology: Topology): GLenum =
   case topology

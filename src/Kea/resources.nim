@@ -190,15 +190,8 @@ proc texture*(
   format: static TextureFormat,
   options: TextureOptions
 ): Texture[format] =
-  const bytesPerPixel =
-    case format
-    of Rgba8Linear, Rgba8Srgb, R32Float, Depth24, Depth32Float: 4
-    of Rg32Float: 8
-    of Rgb32Float: 12
-    of Rgba32Float: 16
-
   doAssert data.len > 0
-  doAssert data.len == width * height * bytesPerPixel,
+  doAssert data.len == width * height * format.bytesPerPixel,
     "Texture data size does not match texture dimensions"
 
   result = cached(

@@ -213,7 +213,7 @@ proc mesh(
   )
 
 proc mesh*(
-  allocator: MeshAllocator, 
+  allocator: MeshAllocator,
   primitive: Primitive
 ): Mesh =
   case primitive

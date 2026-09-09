@@ -1,11 +1,12 @@
 import transform, math
 
-const WorldOrigin*: Vec3 = [0.0, 0.0, 0.0]
-const WorldBackward*: Vec3 = [0.0, 0.0, 1.0]
-const WorldForward*: Vec3 = [0.0, 0.0, -1.0]
-const WorldUp*: Vec3 = [0.0, 1.0, 0.0]
-const WorldRight*: Vec3 = [1.0, 0.0, 0.0]
-const WorldLeft*: Vec3 = [-1.0, 0.0, 0.0]
+const
+  WorldOrigin*: Vec3 = [0.0, 0.0, 0.0]
+  WorldBackward*: Vec3 = [0.0, 0.0, 1.0]
+  WorldForward*: Vec3 = [0.0, 0.0, -1.0]
+  WorldUp*: Vec3 = [0.0, 1.0, 0.0]
+  WorldRight*: Vec3 = [1.0, 0.0, 0.0]
+  WorldLeft*: Vec3 = [-1.0, 0.0, 0.0]
 
 type
   CameraKind* = enum

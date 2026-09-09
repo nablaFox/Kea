@@ -109,6 +109,20 @@ proc components(format: TextureFormat): int =
   of Depth24, Depth32Float:
     1
 
+proc bytesPerComponent*(format: TextureFormat): int =
+  case format
+  of Rgba8Linear, Rgba8Srgb:
+    1
+  of R32Float, Rg32Float, Rgb32Float, Rgba32Float:
+    4
+  of Depth24:
+    3
+  of Depth32Float:
+    4
+
+proc bytesPerPixel*(format: TextureFormat): int =
+  format.components * format.bytesPerComponent
+
 proc info(format: TextureFormat): TextureInfo =
   case format
   of Rgba8Linear:
@@ -247,12 +261,7 @@ proc new*(
   options: TextureOptions,
 ): Texture[format] =
   doAssert data.len > 0
-
-  const bytesPerComponent =
-    if format in {Rgba8Linear, Rgba8Srgb}: 1
-    else: 4
-
-  doAssert data.len == width * height * format.components * bytesPerComponent,
+  doAssert data.len == width * height * format.bytesPerPixel,
     "Texture data size does not match texture dimensions"
 
   result = createTexture[format](

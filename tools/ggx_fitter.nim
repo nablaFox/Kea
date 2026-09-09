@@ -11,13 +11,14 @@ type
     alpha: float32
 
 proc sample(ggx: GgxBrdf, wo: Vec3, u: Vec2): Vec3 =
-  let phi = 2.0'f * PI.float32 * u.x
+  let
+    phi = 2.0'f * PI.float32 * u.x
 
-  let radius = ggx.alpha * sqrt(u.y / (1.0'f - u.y))
+    radius = ggx.alpha * sqrt(u.y / (1.0'f - u.y))
 
-  let normal = [radius * cos(phi), radius * sin(phi), 1.0].normalize
+    normal = [radius * cos(phi), radius * sin(phi), 1.0].normalize
 
-  let wi = reflect(-wo, normal)
+    wi = reflect(-wo, normal)
 
   return wi
 
@@ -65,9 +66,9 @@ proc eval(ggx: GgxBrdf, wi, wo: Vec3): tuple[
 
 createDir(OutputDir)
 
-let inverseMatrixFile = open(OutputDir / "inverse_matrix.rgba32f.bin", fmWrite)
-
-let magnitudeFresnelFile = open(OutputDir / "magnitude_fresnel.rg32f.bin", fmWrite)
+let
+  inverseMatrixFile = open(OutputDir / "inverse_matrix.rgba32f.bin", fmWrite)
+  magnitudeFresnelFile = open(OutputDir / "magnitude_fresnel.rg32f.bin", fmWrite)
 
 var completed = 0
 
@@ -77,9 +78,10 @@ for viewIndex in 0 ..< N:
       let x = viewIndex / (N - 1)
       min(PI / 2, arccos(1.0 - x^2))
 
-    let view = [sin(theta).float32, 0.0, cos(theta).float32]
+    let
+      view = [sin(theta).float32, 0.0, cos(theta).float32]
 
-    let alpha = max((roughnessIndex / (N - 1))^2, 0.00001)
+      alpha = max((roughnessIndex / (N - 1))^2, 0.00001)
 
     let fit = brdf.fit(
       GgxBrdf(alpha: alpha),

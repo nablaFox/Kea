@@ -1,12 +1,14 @@
 import math
 
-type Color* = Vec3
+type
+  Color* = Vec3
 
-const Red*: Color = [1.0, 0.0, 0.0]
-const Green*: Color = [0.0, 1.0, 0.0]
-const Blue*: Color  = [0.0, 0.0, 1.0]
-const White*: Color = [1.0, 1.0, 1.0]
-const Black*: Color = [0.0, 0.0, 0.0]
+const
+  Red*: Color = [1.0, 0.0, 0.0]
+  Green*: Color = [0.0, 1.0, 0.0]
+  Blue*: Color  = [0.0, 0.0, 1.0]
+  White*: Color = [1.0, 1.0, 1.0]
+  Black*: Color = [0.0, 0.0, 0.0]
 
 template r*(v: Vec1 | Vec2 | Vec3 | Vec4): untyped =
   v[0]
