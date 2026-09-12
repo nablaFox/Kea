@@ -8,9 +8,9 @@ let
     cursor = Disabled
   )
 
-  allocator = allocator.new(kea)
+  res = resources.new(kea)
 
-  pbr = pbr.new(kea)
+  pbr = pbr.new(res)
 
   light = RectLight(
     position: [0.0'f, 10.0, 0.0],
@@ -29,7 +29,7 @@ var orbit = orbit.new(
 
 discard pbr.add(
   "floor",
-  allocator.mesh(Quad),
+  res.mesh(Quad),
   albedo = [0.32'f, 0.38, 0.43],
   roughness = 0.15'f,
   metallic = 0.0'f,
@@ -40,7 +40,7 @@ discard pbr.add(
 
 discard pbr.add(
   "sphere",
-  allocator.mesh(Sphere)
+  res.mesh(Sphere)
 )
 
 for frame in kea.frames:

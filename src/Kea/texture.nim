@@ -298,11 +298,28 @@ proc new*(
 
 proc new*(
   kea: Kea,
+  width, height: Natural,
+  format: static TextureFormat,
+  options: TextureOptions
+): Texture[format] =
+  createTexture[format](
+    kea,
+    nil,
+    width,
+    height,
+    format.info,
+    options
+  )
+
+proc new*(
+  kea: Kea,
   data: pointer,
   width, height: Natural,
   format: static TextureFormat,
   options: TextureOptions
 ): Texture[format] =
+  doAssert data != nil
+
   createTexture[format](
     kea,
     data,

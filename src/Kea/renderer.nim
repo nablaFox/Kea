@@ -150,7 +150,8 @@ proc render*[
       {.error: "Fragment output count does not match target attachment count".}
 
     else:
-      checkAttachments(A, Atts)
+      static:
+        checkAttachments(A, Atts)
 
   target.use()
 
@@ -172,6 +173,9 @@ proc render*[
       glDepthFunc(GL_ALWAYS)
 
     glDepthMask(depthWrite)
+  else:
+    glDisable(GL_DEPTH_TEST)
+    glDepthMask(false)
 
   case cullMode
   of CullDisabled:

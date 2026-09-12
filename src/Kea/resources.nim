@@ -1,11 +1,13 @@
 import
   math,
   core,
-  texture as textureModule,
   mesh,
   renderer,
   allocator,
   primitives,
+  shader,
+  texture as textureModule,
+  target as targetModule,
   std/[tables, macros]
 
 type
@@ -17,14 +19,20 @@ type
 
     allocator: MeshAllocator
 
+    quad: RenderItem[tuple[]]
+
     meshes: Table[string, Mesh]
     textures: Table[string, RootRef]
     renderers: Table[string, RootRef]
+    targets: Table[string, RootRef]
 
 proc new*(kea: Kea): Resources =
+  let allocator = allocator.new(kea)
+
   Resources(
     kea: kea,
-    allocator: allocator.new(kea)
+    allocator: allocator,
+    quad: item.new(allocator.mesh(Quad))
   )
 
 template cached(
@@ -199,7 +207,6 @@ proc texture*(
     key,
     textureModule.new(
       res.kea,
-      nil,
       width,
       height,
       format,
@@ -244,7 +251,6 @@ proc texture*(
     key,
     textureModule.new(
       res.kea,
-      nil,
       width,
       height,
       format,
@@ -268,7 +274,6 @@ proc texture*(
 ): Texture[format] =
   textureModule.new(
     res.kea,
-    nil,
     width,
     height,
     format,
@@ -287,7 +292,6 @@ proc texture*(
     key,
     textureModule.new(
       res.kea,
-      nil,
       width,
       height,
       format,
@@ -330,7 +334,6 @@ proc texture*(
     key,
     textureModule.new(
       res.kea,
-      nil,
       width,
       height,
       format,
@@ -344,8 +347,7 @@ proc texture*(
   doAssert result.options == options,
     "Cached texture options do not match requested options"
 
-  if data != nil:
-    result.update(data)
+  result.update(data)
 
 macro renderer*(
   res: Resources,
@@ -380,3 +382,188 @@ macro renderer*(
       )
 
       r
+
+proc renderImpl(
+  res, key, destination, vert,
+  frag, drawables, uniforms,
+  cullMode, depthTest, depthWrite: NimNode
+): NimNode {.compileTime.} =
+  result = quote do:
+    block:
+      let
+        resourceStore = `res`
+        r = resourceStore.renderer(
+          `key`,
+          `vert`,
+          `frag`,
+          globals = typeof(`uniforms`)
+        )
+
+      r.render(
+        `destination`, `drawables`, `uniforms`,
+        `cullMode`, `depthTest`, `depthWrite`
+      )
+
+macro render*[G, M](
+  res: Resources,
+  renderer: string,
+  target: RenderTarget,
+  vert, frag: typed,
+  items: seq[RenderItem[M]],
+  globals: G,
+  cullMode: CullMode = CullDisabled,
+  depthTest: DepthTest = DepthLess,
+  depthWrite: bool = true
+): untyped =
+  result = renderImpl(
+    res, renderer, target, vert,
+    frag, items, globals,
+    cullMode, depthTest, depthWrite
+  )
+
+macro render*[G, M](
+  res: Resources,
+  renderer: string,
+  target: RenderTarget,
+  vert, frag: typed,
+  item: RenderItem[M],
+  globals: G,
+  cullMode: CullMode = CullDisabled,
+  depthTest: DepthTest = DepthLess,
+  depthWrite: bool = true
+): untyped =
+  result = renderImpl(
+    res, renderer, target, vert,
+    frag, item, globals,
+    cullMode, depthTest, depthWrite
+  )
+
+proc fullscreenVert(vert: Vertex): tuple[pos: Vec4, uv: Vec2] =
+  result.pos = vert.position.hom
+  result.uv = vert.uv
+
+macro render*[G](
+  res: Resources,
+  renderer: string,
+  target: RenderTarget,
+  frag: typed,
+  globals: G
+): untyped =
+  result = quote do:
+    block:
+      let resourceStore = `res`
+      resourceStore.render(
+        `renderer`, `target`, fullscreenVert, `frag`,
+        resourceStore.quad, `globals`,
+        cullMode = CullDisabled,
+        depthTest = DepthDisabled,
+        depthWrite = false
+      )
+
+macro render*[G, M](
+  res: Resources,
+  renderer: string,
+  target: string,
+  width, height: Positive,
+  vert, frag: typed,
+  items: seq[RenderItem[M]],
+  globals: G,
+  cullMode: CullMode = CullDisabled,
+  depthTest: static DepthTest = DepthLess,
+  depthWrite: bool = true
+): untyped =
+  let
+    resourceStore = genSym(nskLet, "resourceStore")
+    w = genSym(nskLet, "width")
+    h = genSym(nskLet, "height")
+    testMode = newLit(depthTest)
+    attachments = newNimNode(nnkTupleConstr)
+
+  for field in attachmentsType(frag):
+    var format: NimNode
+
+    for (typ, candidate) in [
+      (bindSym"float32", bindSym"R32Float"),
+      (bindSym"Vec2", bindSym"Rg32Float"),
+      (bindSym"Vec3", bindSym"Rgb32Float"),
+      (bindSym"Vec4", bindSym"Rgba32Float")
+    ]:
+      if sameType(field[^2], typ):
+        format = candidate
+        break
+
+    if format == nil:
+      error "Unsupported render target output: " & field[^2].repr, field[^2]
+
+    for index in 0 ..< field.len - 2:
+      let attachment = quote do:
+        textureModule.new(
+          `resourceStore`.kea,
+          `w`,
+          `h`,
+          `format`,
+          DataTextureOptions
+        )
+
+      attachments.add newColonExpr(field[index].strVal.ident, attachment)
+
+  let createTarget = quote do:
+    when `testMode` == DepthDisabled:
+      targetModule.new(`resourceStore`.kea, `attachments`)
+    else:
+      targetModule.new(
+        `resourceStore`.kea,
+        `attachments`,
+        textureModule.new(
+          `resourceStore`.kea,
+          `w`,
+          `h`,
+          Depth24,
+          DataTextureOptions
+        )
+      )
+
+  result = quote do:
+    block:
+      let
+        `resourceStore` = `res`
+        `w` = `width`
+        `h` = `height`
+        key = `target`
+
+        r = `resourceStore`.renderer(
+          `renderer`,
+          `vert`,
+          `frag`,
+          globals = typeof(`globals`)
+        )
+
+      var t = cached(`resourceStore`.targets, key, `createTarget`)
+
+      if t.size != (`w`.int32, `h`.int32):
+        t = `createTarget`
+        `resourceStore`.targets[key] = CacheEntry[typeof(t)](value: t)
+
+      t.clear()
+      r.render(t, `items`, `globals`, `cullMode`, `testMode`, `depthWrite`)
+
+      t
+
+macro render*[G](
+  res: Resources,
+  renderer: string,
+  target: string,
+  width, height: Positive,
+  frag: typed,
+  globals: G
+): untyped =
+  result = quote do:
+    block:
+      let resourceStore = `res`
+      resourceStore.render(
+        `renderer`, `target`, `width`, `height`, fullscreenVert, `frag`,
+        @[resourceStore.quad], `globals`,
+        cullMode = CullDisabled,
+        depthTest = DepthDisabled,
+        depthWrite = false
+      )

@@ -22,9 +22,6 @@ template b*(v: Vec3 | Vec4): untyped =
 template a*(v: Vec4): untyped =
   v[3]
 
-proc mix*(a, b: Color, t: float32): Color =
-  a * (1.0'f - t) + b * t
-
 proc sRGB*(color: Color): Color =
   for i in 0 ..< 3:
     if color[i] <= 0.0031308'f:

@@ -174,7 +174,7 @@ proc render(
 
   let
     transmittance = res.texture(
-      "mcml/transmittance",
+      key = "mcml/transmittance",
       data = mcml.transmittance,
       width = mcml.resolution,
       height = mcml.resolution,
@@ -183,28 +183,12 @@ proc render(
     )
 
     diffuse = res.texture(
-      "mcml/diffuse",
+      key = "mcml/diffuse",
       data = mcml.diffuse,
       width = mcml.resolution,
       height = mcml.resolution,
       format = R32Float,
       DataTextureOptions
-    )
-
-    globals = (
-      view: camera.view,
-      proj: camera.proj target.aspect,
-      transmittance: transmittance,
-      diffuse: diffuse,
-      photons: mcml.photons,
-      size: mcml.size
-    )
-
-    renderer = res.renderer(
-      "mcml/renderer",
-      vert = vert,
-      frag = frag,
-      globals = typeof(globals)
     )
 
     slab = item.new(
@@ -222,10 +206,20 @@ proc render(
       ] * 0.5'f
     )
 
-  renderer.render(
+  res.render(
+    renderer = "mcml/renderer",
     target = target,
+    vert = vert,
+    frag = frag,
     item = slab,
-    globals = globals
+    globals = (
+      view: camera.view,
+      proj: camera.proj target.aspect,
+      transmittance: transmittance,
+      diffuse: diffuse,
+      photons: mcml.photons,
+      size: mcml.size
+    )
   )
 
 let

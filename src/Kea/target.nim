@@ -291,23 +291,11 @@ proc aspect*[K: static RenderTargetKind; A: tuple](
 
   width.float32 / height.float32
 
-proc attachments*[A: tuple](target: ColorTarget[A]): A =
+proc atts*[A: tuple](target: ColorTarget[A]): A =
   target.attachments
 
-proc attachments*[A: tuple](target: ColorDepthTarget[A]): A =
+proc atts*[A: tuple](target: ColorDepthTarget[A]): A =
   target.attachments
-
-proc attachment*[A: tuple](
-  target: ColorTarget[A],
-  index: static int
-): auto =
-  target.attachments[index]
-
-proc attachment*[A: tuple](
-  target: ColorDepthTarget[A],
-  index: static int
-): auto =
-  target.attachments[index]
 
 proc depth*(target: DepthTarget): Texture[Depth24] =
   target.depth

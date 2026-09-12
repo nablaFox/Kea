@@ -109,6 +109,9 @@ proc normalize*[C: static int](v: Vec[C]): Vec[C] =
 proc length*[C: static int](v: Vec[C]): float32 =
   dot(v, v).sqrt
 
+proc mix*[C: static int](a, b: Vec[C], t: float32): Vec[C] =
+  a * (1.0'f - t) + b * t
+
 proc cross*(a, b: Vec3): Vec3 =
   [
     a[1] * b[2] - a[2] * b[1],
