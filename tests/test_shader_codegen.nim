@@ -104,7 +104,7 @@ suite "shader type generation":
     )
 
     check "uniform int value;" in glsl
-    check "layout (location = 0) out int pixel;" in glsl
+    check "layout (location = 0) out int keaOut_pixel;" in glsl
 
   test "maps scalar, vector, and matrix types":
     let glsl = fragGlsl(
@@ -252,8 +252,8 @@ suite "shader interface generation":
         discard
     )
 
-    check "out vec3 color;" in glsl
-    check "out vec2 uv;" in glsl
+    check "out vec3 keaVary_color;" in glsl
+    check "out vec2 keaVary_uv;" in glsl
     check "out vec4 pos;" notin glsl
 
   test "assigns fragment output locations in tuple order":
@@ -264,8 +264,8 @@ suite "shader interface generation":
         discard
     )
 
-    check "layout (location = 0) out vec4 color;" in glsl
-    check "layout (location = 1) out float mask;" in glsl
+    check "layout (location = 0) out vec4 keaOut_color;" in glsl
+    check "layout (location = 1) out float keaOut_mask;" in glsl
 
   test "declares ordinary vertex parameters as uniforms":
     let glsl = vertGlsl(
@@ -284,7 +284,7 @@ suite "shader interface generation":
     )
 
     check "uniform vec3 color;" in glsl
-    check "in vec3 color;" notin glsl
+    check "in vec3 keaVary_color;" notin glsl
 
   test "declares object parameters as struct uniforms":
     let glsl = fragGlsl(
@@ -312,7 +312,7 @@ suite "shader interface generation":
         discard
     )
 
-    check "in vec3 color;" in glsl
+    check "in vec3 keaVary_color;" in glsl
     check "uniform vec3 color;" notin glsl
 
   test "uses flat interpolation for integer varyings":
@@ -329,8 +329,8 @@ suite "shader interface generation":
           result.pixel = category
       )
 
-    check "flat out int category;" in vs
-    check "flat in int category;" in fs
+    check "flat out int keaVary_category;" in vs
+    check "flat in int keaVary_category;" in fs
 
   test "does not expose vertex pos as fragment input":
     let glsl = fragGlsl(
@@ -349,8 +349,8 @@ suite "shader interface generation":
         discard
     )
 
-    check "out float first;" in glsl
-    check "out float second;" in glsl
+    check "out float keaVary_first;" in glsl
+    check "out float keaVary_second;" in glsl
 
   test "assigns separate locations to grouped fragment outputs":
     let glsl = fragGlsl(
@@ -360,9 +360,9 @@ suite "shader interface generation":
         discard
     )
 
-    check "layout (location = 0) out float first;" in glsl
-    check "layout (location = 1) out float second;" in glsl
-    check "layout (location = 2) out vec4 color;" in glsl
+    check "layout (location = 0) out float keaOut_first;" in glsl
+    check "layout (location = 1) out float keaOut_second;" in glsl
+    check "layout (location = 2) out vec4 keaOut_color;" in glsl
 
   test "does not declare Vertex parameters as uniforms":
     let glsl = vertGlsl(positionOnlyVertex)
@@ -393,6 +393,45 @@ suite "shader interface generation":
 
     check (Material is tuple[strength: float32])
 
+  test "avoids conflicts between vertex uniforms and varyings":
+    let glsl = vertGlsl(
+      proc(vert: Vertex, color: Color): tuple[pos: Vec4, color: Color] =
+        result.pos = vert.position.hom
+        result.color = color
+    )
+
+    check "uniform vec3 color;" in glsl
+    check "out vec3 keaVary_color;" in glsl
+    check "keaVary_color = color;" in glsl
+
+  test "avoids conflicts between fragment uniforms and outputs":
+    let glsl = fragGlsl(
+      positionOnlyVertex,
+
+      proc(color: Color): tuple[color: Vec4] =
+        result.color = color.hom
+    )
+
+    check "uniform vec3 color;" in glsl
+    check "layout (location = 0) out vec4 keaOut_color;" in glsl
+    check "keaOut_color = vec4(color, 1.0);" in glsl
+
+  test "avoids conflicts between fragment varyings and outputs":
+    proc vertex(vert: Vertex): tuple[pos: Vec4, color: Color] =
+      result.pos = vert.position.hom
+      result.color = vert.color
+
+    let glsl = fragGlsl(
+      vertex,
+
+      proc(color: Color): tuple[color: Vec4] =
+        result.color = color.hom
+    )
+
+    check "in vec3 keaVary_color;" in glsl
+    check "layout (location = 0) out vec4 keaOut_color;" in glsl
+    check "keaOut_color = vec4(keaVary_color, 1.0);" in glsl
+
 
 suite "shader expression generation":
   test "lowers hom intrinsic":
@@ -403,7 +442,7 @@ suite "shader expression generation":
         result.pixel = color.hom
     )
 
-    check "pixel = vec4(color, 1.0);" in glsl
+    check "keaOut_pixel = vec4(color, 1.0);" in glsl
     check "hom(" notin glsl
 
   test "lowers vector component templates to indexing":
@@ -417,10 +456,10 @@ suite "shader expression generation":
         result.w = value.w
     )
 
-    check "x = value[0];" in glsl
-    check "y = value[1];" in glsl
-    check "z = value[2];" in glsl
-    check "w = value[3];" in glsl
+    check "keaOut_x = value[0];" in glsl
+    check "keaOut_y = value[1];" in glsl
+    check "keaOut_z = value[2];" in glsl
+    check "keaOut_w = value[3];" in glsl
 
   test "emits object field access":
     let glsl = fragGlsl(
@@ -430,7 +469,7 @@ suite "shader expression generation":
         result.pixel = light.position.hom
     )
 
-    check "pixel = vec4(light.position, 1.0);" in glsl
+    check "keaOut_pixel = vec4(light.position, 1.0);" in glsl
 
   test "emits arithmetic expressions":
     let glsl = fragGlsl(
@@ -440,7 +479,7 @@ suite "shader expression generation":
         result.value = a + b * 2.0
     )
 
-    check "value = a + b * 2.0;" in glsl
+    check "keaOut_value = a + b * 2.0;" in glsl
 
   test "preserves required parentheses":
     let glsl = fragGlsl(
@@ -450,7 +489,7 @@ suite "shader expression generation":
         result.value = (a + b) * 2.0
     )
 
-    check "value = (a + b) * 2.0;" in glsl
+    check "keaOut_value = (a + b) * 2.0;" in glsl
 
   test "preserves grouping in nested subtraction":
     let glsl = fragGlsl(
@@ -460,7 +499,7 @@ suite "shader expression generation":
         result.pixel = a - (b - c)
     )
 
-    check "pixel = a - (b - c);" in glsl
+    check "keaOut_pixel = a - (b - c);" in glsl
 
   test "preserves grouping in division by a product":
     let glsl = fragGlsl(
@@ -470,7 +509,7 @@ suite "shader expression generation":
         result.pixel = a / (b * c)
     )
 
-    check "pixel = a / (b * c);" in glsl
+    check "keaOut_pixel = a / (b * c);" in glsl
 
   test "emits unary minus":
     let glsl = fragGlsl(
@@ -480,7 +519,7 @@ suite "shader expression generation":
         result.pixel = -value
     )
 
-    check "pixel = -value;" in glsl
+    check "keaOut_pixel = -value;" in glsl
 
   test "preserves grouping under unary minus":
     let glsl = fragGlsl(
@@ -491,8 +530,8 @@ suite "shader expression generation":
         result.negation = -(-a)
     )
 
-    check "sum = -(a + b);" in glsl
-    check "negation = -(-a);" in glsl
+    check "keaOut_sum = -(a + b);" in glsl
+    check "keaOut_negation = -(-a);" in glsl
 
   test "emits ternary expressions":
     let glsl = fragGlsl(
@@ -504,7 +543,7 @@ suite "shader expression generation":
           else: -value
     )
 
-    check "pixel = (0.0 <= value ? value : -value);" in glsl
+    check "keaOut_pixel = (0.0 <= value ? value : -value);" in glsl
 
   test "preserves all branches of ternary expressions":
     let glsl = fragGlsl(
@@ -517,7 +556,7 @@ suite "shader expression generation":
           else: 0.0
     )
 
-    check "pixel = (value < 0.0 ? -1.0 : 0.0 < value ? 1.0 : 0.0);" in glsl
+    check "keaOut_pixel = (value < 0.0 ? -1.0 : 0.0 < value ? 1.0 : 0.0);" in glsl
 
   test "emits vector indexing":
     let glsl = fragGlsl(
@@ -527,7 +566,7 @@ suite "shader expression generation":
         result.pixel = value[2]
     )
 
-    check "pixel = value[2];" in glsl
+    check "keaOut_pixel = value[2];" in glsl
 
   test "preserves grouping before indexing and xyz swizzles":
     let glsl = fragGlsl(
@@ -538,8 +577,8 @@ suite "shader expression generation":
         result.color = (a + b).xyz
     )
 
-    check "component = (a + b)[2];" in glsl
-    check "color = (a + b).xyz;" in glsl
+    check "keaOut_component = (a + b)[2];" in glsl
+    check "keaOut_color = (a + b).xyz;" in glsl
     check "xyz(" notin glsl
 
   test "emits numeric conversions":
@@ -550,7 +589,7 @@ suite "shader expression generation":
         result.pixel = index.float32
     )
 
-    check "pixel = float(index);" in glsl
+    check "keaOut_pixel = float(index);" in glsl
 
   test "emits float32 array literals as vectors":
     let glsl = fragGlsl(
@@ -560,7 +599,7 @@ suite "shader expression generation":
         result.pixel = [1.0'f, 2.0, 0.5, 1.0]
     )
 
-    check "pixel = vec4(1.0, 2.0, 0.5, 1.0);" in glsl
+    check "keaOut_pixel = vec4(1.0, 2.0, 0.5, 1.0);" in glsl
 
   test "emits nested float32 array literals as matrices":
     let glsl = fragGlsl(
@@ -583,7 +622,7 @@ suite "shader expression generation":
       "vec3(7.0, 8.0, 9.0));"
     ) in glsl
 
-    check "pixel = matrix[0][1];" in glsl
+    check "keaOut_pixel = matrix[0][1];" in glsl
 
 
 suite "shader body generation":
@@ -595,7 +634,7 @@ suite "shader body generation":
         result.pixel = value
     )
 
-    check "pixel = value;" in glsl
+    check "keaOut_pixel = value;" in glsl
 
   test "maps Vertex fields to attributes":
     let glsl = vertGlsl(
@@ -612,9 +651,9 @@ suite "shader body generation":
     )
 
     check "gl_Position = vec4(vertPosition, 1.0);" in glsl
-    check "normal = vertNormal;" in glsl
-    check "color = vertColor;" in glsl
-    check "uv = vertUv;" in glsl
+    check "keaVary_normal = vertNormal;" in glsl
+    check "keaVary_color = vertColor;" in glsl
+    check "keaVary_uv = vertUv;" in glsl
 
   test "maps vertex result fields to varyings":
     let glsl = vertGlsl(
@@ -626,8 +665,8 @@ suite "shader body generation":
         result.color = vert.color
     )
 
-    check "out vec3 color;" in glsl
-    check "color = vertColor;" in glsl
+    check "out vec3 keaVary_color;" in glsl
+    check "keaVary_color = vertColor;" in glsl
 
   test "maps fragment result fields to output variables":
     let glsl = fragGlsl(
@@ -638,8 +677,8 @@ suite "shader body generation":
         result.second = b
     )
 
-    check "first = a;" in glsl
-    check "second = b;" in glsl
+    check "keaOut_first = a;" in glsl
+    check "keaOut_second = b;" in glsl
     check "result." notin glsl
 
   test "emits initialized let declarations":
@@ -652,7 +691,7 @@ suite "shader body generation":
     )
 
     check "float doubled = value * 2.0;" in glsl
-    check "pixel = doubled;" in glsl
+    check "keaOut_pixel = doubled;" in glsl
 
   test "emits multiple let bindings with different types":
     let glsl = fragGlsl(
@@ -672,7 +711,7 @@ suite "shader body generation":
     check "float intensity = 1.0;" in glsl
     check "int count = 2;" in glsl
     check "vec2 uv = vec2(3.0, 2.0);" in glsl
-    check "pixel = vec4(intensity, float(count), uv[0], uv[1])" in glsl
+    check "keaOut_pixel = vec4(intensity, float(count), uv[0], uv[1])" in glsl
 
   test "emits comparison and boolean operators":
     let glsl = fragGlsl(
@@ -720,9 +759,9 @@ suite "shader body generation":
 
     check """
       if (0.0 < value) {
-        pixel = value;
+        keaOut_pixel = value;
       } else {
-        pixel = 0.0;
+        keaOut_pixel = 0.0;
       }
     """.normalized in glsl.normalized
 
@@ -808,7 +847,7 @@ suite "shader body generation":
 
     let declarationPosition = glsl.find("float doubled = value;")
     let assignmentPosition = glsl.find("doubled = doubled * 2.0;")
-    let outputPosition = glsl.find("pixel = doubled;")
+    let outputPosition = glsl.find("keaOut_pixel = doubled;")
 
     check declarationPosition >= 0
     check assignmentPosition > declarationPosition
@@ -830,11 +869,11 @@ suite "shader body generation":
 
       check "if (value < 0.0) {" in glsl
       check "float magnitude = -value;" in glsl
-      check "pixel = magnitude * 2.0;" in glsl
+      check "keaOut_pixel = magnitude * 2.0;" in glsl
 
       check "} else {" in glsl
       check "float doubled = value * 2.0;" in glsl
-      check "pixel = doubled + 1.0;" in glsl
+      check "keaOut_pixel = doubled + 1.0;" in glsl
 
       check "keaTemp" notin glsl
 
@@ -850,7 +889,7 @@ suite "shader helper generation":
     )
 
     check "shaderDouble(value);" in glsl
-    check "pixel = value;" in glsl
+    check "keaOut_pixel = value;" in glsl
 
   test "emits used helper functions once":
     let glsl = fragGlsl(
@@ -862,8 +901,8 @@ suite "shader helper generation":
     )
 
     check glsl.count("float shaderDouble(") == 1
-    check "first = shaderDouble(a);" in glsl
-    check "second = shaderDouble(b);" in glsl
+    check "keaOut_first = shaderDouble(a);" in glsl
+    check "keaOut_second = shaderDouble(b);" in glsl
 
   test "emits helper dependencies before their callers":
     let glsl = fragGlsl(
@@ -879,7 +918,7 @@ suite "shader helper generation":
     check doublePosition >= 0
     check quadruplePosition > doublePosition
     check glsl.count("float shaderDouble(") == 1
-    check "pixel = shaderQuadruple(value);" in glsl
+    check "keaOut_pixel = shaderQuadruple(value);" in glsl
 
   test "emits helpers called with UFCS syntax":
     let glsl = fragGlsl(
@@ -892,7 +931,7 @@ suite "shader helper generation":
     check "float shaderDouble(float x) {" in glsl
     check "result = x * 2.0;" in glsl
     check "return result;" in glsl
-    check "pixel = shaderDouble(value);" in glsl
+    check "keaOut_pixel = shaderDouble(value);" in glsl
 
   test "does not emit unused helper functions":
     let glsl = fragGlsl(
@@ -915,7 +954,7 @@ suite "shader helper generation":
     check "float shaderExplicitReturn(float x) {" in glsl
     check "result = x * 2.0;" in glsl
     check "return result;" in glsl
-    check "pixel = shaderExplicitReturn(value);" in glsl
+    check "keaOut_pixel = shaderExplicitReturn(value);" in glsl
 
   test "emits helper result assignments":
     let glsl = fragGlsl(
@@ -932,7 +971,7 @@ suite "shader helper generation":
        "result = x * 2.0;" in glsl and
        "return result;" in glsl)
     )
-    check "pixel = shaderResultAssignment(value);" in glsl
+    check "keaOut_pixel = shaderResultAssignment(value);" in glsl
 
   test "declares structs before helpers that use them":
     let glsl = fragGlsl(
@@ -982,7 +1021,7 @@ suite "shader helper generation":
     check mainPosition > helperPosition
     check glsl.count("float innerDouble(") == 1
     check "result = x * 2.0;" in glsl
-    check "pixel = innerDouble(value);" in glsl
+    check "keaOut_pixel = innerDouble(value);" in glsl
 
   test "emits helpers defined inside helpers":
     let glsl = fragGlsl(
@@ -1003,7 +1042,7 @@ suite "shader helper generation":
     check glsl.count("float innerDouble(") == 1
     check glsl.count("float shaderWithNestedHelper(") == 1
     check "result = innerDouble(x);" in glsl
-    check "pixel = shaderWithNestedHelper(value);" in glsl
+    check "keaOut_pixel = shaderWithNestedHelper(value);" in glsl
 
   test "emits helper bodies directly into implicit result":
     proc helperWithEarlyReturn(value: float32): float32 =
@@ -1046,12 +1085,12 @@ suite "complete shader generation":
 
   test "generates fragment shader with color uniform":
     let expected = FragmentHeader & """
-      layout (location = 0) out vec4 pixel;
+      layout (location = 0) out vec4 keaOut_pixel;
 
       uniform vec3 color;
 
       void main() {
-        pixel = vec4(color, 1.0);
+        keaOut_pixel = vec4(color, 1.0);
       }
     """
 

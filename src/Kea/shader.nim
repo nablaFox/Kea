@@ -37,6 +37,11 @@ type
     returnType: NimNode
     parameters: seq[Parameter]
 
+  ShaderStage = enum
+    NoStage,
+    VertexStage,
+    FragmentStage
+
 iterator fields(node: NimNode): Parameter =
   for definition in node:
     if definition.kind == nnkIdentDefs:
@@ -81,6 +86,20 @@ func signature(routine: NimNode): Signature =
 
   result.parameters = params.fields.toSeq
 
+proc varyName(name: string): string =
+  "keaVary_" & name
+
+proc outName(name: string): string =
+  "keaOut_" & name
+
+proc validateUserName(name: NimNode) =
+  let value = name.strVal
+
+  if value.startsWith("keaVary_") or
+     value.startsWith("keaOut_") or
+     value.startsWith("keaTemp"):
+    error "identifier uses reserved Kea prefix: " & value, name
+
 proc rootTypes(signature: Signature): seq[NimNode] =
   if signature.returnType.kind != nnkEmpty:
     result.add signature.returnType
@@ -97,7 +116,7 @@ proc localTypes(body: NimNode): seq[NimNode] =
       return
 
     of nnkLetSection, nnkVarSection:
-      for definition in node:
+      for definition in node: 
         if definition.kind == nnkIdentDefs:
           for index in 0 ..< definition.len - 2:
             types.add definition[index].getTypeInst
@@ -452,8 +471,10 @@ proc identifiers(node: NimNode): seq[string] =
 
 proc emitBody(
   body: NimNode,
+  stage: ShaderStage = NoStage,
   isShaderMain = false,
-  hasResult = false
+  hasResult = false,
+  varyings: seq[NimNode] = @[]
 ): string =
   var
     usedNames = body.identifiers
@@ -492,6 +513,7 @@ proc emitBody(
 
         result =
           if name.len > 0: name
+          elif node in varyings: node.strVal.varyName
           else: node.strVal
 
     of nnkDotExpr:
@@ -499,8 +521,14 @@ proc emitBody(
 
       if isShaderMain and node[0].eqIdent("result"):
         result =
-          if field == "pos": "gl_Position"
-          else: field
+          if field == "pos":
+            "gl_Position"
+          elif stage == VertexStage:
+            field.varyName
+          elif stage == FragmentStage:
+            field.outName
+          else:
+            field
 
       elif isShaderMain and
         sameType(node[0].getTypeImpl, bindSym"Vertex"):
@@ -701,6 +729,8 @@ proc emitBody(
             typ = symbol.getTypeInst
             name = symbol.strVal
 
+          validateUserName(symbol)
+
           if typ.isTextureType:
             error "local texture declarations are not supported", symbol
 
@@ -831,6 +861,9 @@ proc emitHelper(helper: NimNode): string =
       if hasResult: signature.returnType.glslType
       else: "void"
 
+  for param in signature.parameters:
+    validateUserName(param.name)
+
   result =
     returnType & " " & helper.strVal &
     "(" & parameters & ") {\n"
@@ -849,9 +882,17 @@ proc emitHelper(helper: NimNode): string =
 
   result.add "}\n"
 
-proc emitMain(body: NimNode): string =
+proc emitMain(
+  body: NimNode,
+  stage: ShaderStage,
+  varyings: seq[NimNode] = @[]
+): string =
   "\nvoid main() {\n" &
-  body.emitBody(isShaderMain = true) &
+  body.emitBody(
+    stage = stage,
+    isShaderMain = true,
+    varyings = varyings
+  ) &
   "}"
 
 proc validateOutputType(typ: NimNode) =
@@ -902,22 +943,26 @@ proc vertGlslImpl*(shader: NimNode): string =
       if sameType(typ, bindSym"int32"): "flat out "
       else: "out "
 
-    result.add qualifier & declaration(typ, field.name.strVal)
+    result.add qualifier & declaration(typ, field.name.strVal.varyName)
 
   for param in signature.parameters:
+    let name = param.name
+
+    validateUserName(name)
+
     if sameType(param.typ, bindSym"Vertex"):
       continue
 
-    if param.name.strVal in ["model", "nmat"]:
+    if name.strVal in ["model", "nmat"]:
       continue
 
-    result.add "uniform " & declaration(param.typ, param.name.strVal)
+    result.add "uniform " & declaration(param.typ, name.strVal)
 
   result.add "\n" & helpers
     .mapIt(it.emitHelper)
     .join("\n")
 
-  result.add body.emitMain
+  result.add body.emitMain(stage = VertexStage)
 
 proc fragGlslImpl*(vert, frag: NimNode): string =
   let
@@ -943,14 +988,18 @@ proc fragGlslImpl*(vert, frag: NimNode): string =
 
     result.add(
       "layout (location = " & $location & ") out " &
-      declaration(field.typ, field.name.strVal)
+      declaration(field.typ, field.name.strVal.outName)
     )
+
+  var varyings: seq[NimNode]
 
   for param in signature.parameters:
     let
       name = param.name.strVal
       varyingType = vertSignature.returnType.fieldType(param.name)
       isVarying = name != "pos" and not varyingType.isNil
+
+    validateUserName(param.name)
 
     if isVarying and varyingType.isTextureType:
       error "texture '" & name & "' cannot be a varying", param.name
@@ -963,6 +1012,9 @@ proc fragGlslImpl*(vert, frag: NimNode): string =
         param.name
       )
 
+    if isVarying:
+      varyings.add param.name
+
     if not isVarying:
       for vertParam in vertSignature.parameters:
         if vertParam.name.strVal == name and
@@ -974,13 +1026,19 @@ proc fragGlslImpl*(vert, frag: NimNode): string =
       elif sameType(param.typ, bindSym"int32"): "flat in "
       else: "in "
 
-    result.add qualifier & declaration(param.typ, name)
+    result.add qualifier & declaration(
+      param.typ, 
+      if isVarying: name.varyName else: name
+    )
 
   result.add "\n" & helpers
     .mapIt(it.emitHelper)
     .join("\n")
 
-  result.add body.emitMain
+  result.add body.emitMain(
+    stage = FragmentStage, 
+    varyings = varyings
+  )
 
 macro vertGlsl*(shader: typed): string =
   newStrLitNode vertGlslImpl(shader)
