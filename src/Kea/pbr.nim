@@ -118,6 +118,7 @@ proc render*(
         )
 
     view = camera.view
+
     proj = camera.proj aspect
 
   if pbr.frame == 0:
@@ -128,7 +129,7 @@ proc render*(
       vert: Vertex,
       model, prevModel: Mat4,
       nmat: Mat3,
-      view, proj, prevViewProj: Mat4
+      view, proj, jitter, prevViewProj: Mat4
     ): tuple[
       pos: Vec4,
       worldNormal: Vec3,
@@ -136,11 +137,11 @@ proc render*(
       currClip: Vec4,
       prevClip: Vec4
     ] =
-      let 
+      let
         P = model * vert.position.hom
         pos = proj * view * P
 
-      result.pos = pos
+      result.pos = jitter * pos
       result.worldPosition = P.xyz
       result.worldNormal = nmat * vert.normal
       result.currClip = pos
@@ -202,6 +203,31 @@ proc render*(
         ltcFresnelWeight = terms.y
       )
 
+    let jitter = block:
+      proc halton(i, base: int): float32 =
+        var
+          f = 1.0'f
+          r = 0.0'f
+          x = i
+
+        while x > 0:
+          f /= base.float32
+          r += f * (x mod base).float32
+          x = x div base
+
+        r
+
+      let 
+        i = int(pbr.frame mod 16) + 1
+
+        trans = [
+          2'f * (halton(i, 2) - 0.5'f) / width.float32,
+          2'f * (halton(i, 3) - 0.5'f) / height.float32,
+          0'f
+        ]
+
+      trans.transMatrix
+
     pbr.res.render(
       renderer = "pbr/geometry-pass",
       target = "pbr/gbuffer",
@@ -213,6 +239,7 @@ proc render*(
       globals = (
         view: view,
         proj: proj,
+        jitter: jitter,
         eye: camera.positioned,
         light: light,
         ltcInverseMatrixLut: pbr.ltcInverseMatrixLut,
@@ -272,10 +299,10 @@ proc render*(
       unshadowed: Texture[Rgb32Float],
       shadowed: Texture[Rgb32Float]
     ): tuple[pixel: Vec3] =
-      let 
+      let
         U = analytic.sample(uv).xyz
         S = shadowed.sample(uv).xyz
-        W = S / unshadowed.sample(uv).xyz 
+        W = S / unshadowed.sample(uv).xyz
 
       result.pixel = U * W
 
@@ -299,13 +326,25 @@ proc render*(
       current: Texture[Rgb32Float],
       motion: Texture[Rg32Float],
       history: Texture[Rgb32Float]
-    ): tuple[pixel: Vec3] = 
-      result.pixel = 
-        if not historyValid:
-          current.sample(uv).xyz
-        else:
-          # TODO
-          current.sample(uv).xyz
+    ): tuple[pixel: Vec3] =
+      let now = current.sample(uv).xyz
+
+      if not historyValid:
+        result.pixel = now
+        return
+
+      let
+        alpha = 0.9'f
+        motionVec = motion.sample(uv).xy
+        historyUv = uv - motionVec
+        history = history.sample(historyUv).xyz
+
+      if historyUv.x < 0 or historyUv.x > 1 or
+         historyUv.y < 0 or historyUv.y > 1:
+        result.pixel = now
+        return
+
+      result.pixel = now * (1 - alpha) + history * alpha
 
     let historyValid =
       pbr.history != nil and
@@ -323,7 +362,7 @@ proc render*(
         current: lit.atts.pixel,
         motion: gbuffer.atts.motion,
         historyValid: historyValid,
-        history: 
+        history:
           if historyValid: pbr.history
           else: lit.atts.pixel,
       )
@@ -337,6 +376,7 @@ proc render*(
       result.pixel = taa
         .sample(uv)
         .xyz
+        .exponential
         .gamma
         .hom
 

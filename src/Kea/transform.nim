@@ -68,35 +68,38 @@ proc rotation*(transform: var Transform): var Mat3 =
 proc rotation*(transform: Transform): Mat3 =
   transform.rotation
 
-proc rotMatrix*(transform: Transform): Mat4 =
-  let rot = transform.rotation
-
+proc rotMatrix(rot: Mat3): Mat4 =
   [
     [rot[0][0], rot[0][1], rot[0][2], 0.0],
     [rot[1][0], rot[1][1], rot[1][2], 0.0],
     [rot[2][0], rot[2][1], rot[2][2], 0.0],
-    [0.0, 0.0, 0.0, 1.0],
+    [0.0, 0.0, 0.0, 1.0]
   ]
 
-proc transMatrix*(transform: Transform): Mat4 =
-  let pos = transform.position
-
+proc transMatrix*(position: Vec3): Mat4 =
   [
-    [1.0'f, 0.0, 0.0, pos.x],
-    [0.0, 1.0, 0.0, pos.y],
-    [0.0, 0.0, 1.0, pos.z],
-    [0.0, 0.0, 0.0, 1.0],
+    [1.0'f, 0.0, 0.0, position.x],
+    [0.0, 1.0, 0.0, position.y],
+    [0.0, 0.0, 1.0, position.z],
+    [0.0, 0.0, 0.0, 1.0]
   ]
-
-proc scaleMatrix*(transform: Transform): Mat4 =
-  let scale = transform.scale
-
+  
+proc scaleMatrix(scale: Vec3): Mat4 =
   [
     [scale.x, 0.0, 0.0, 0.0],
     [0.0, scale.y, 0.0, 0.0],
     [0.0, 0.0, scale.z, 0.0],
-    [0.0, 0.0, 0.0, 1.0],
+    [0.0, 0.0, 0.0, 1.0]
   ]
+
+proc transMatrix*(transform: Transform): Mat4 =
+  transform.position.transMatrix
+
+proc scaleMatrix*(transform: Transform): Mat4 =
+  transform.scale.scaleMatrix
+
+proc rotMatrix*(transform: Transform): Mat4 =
+  transform.rotation.rotMatrix
 
 proc model*(transform: Transform): Mat4 =
   let
