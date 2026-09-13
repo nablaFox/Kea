@@ -49,17 +49,13 @@ proc `=destroy`[
     target.kea = nil
 
 type
-  ColorAtt* = tuple[
-    color: Texture[Rgba8Linear]
-  ]
-
   BackBufferTarget* =
     RenderTarget[BackBuffer, tuple[]]
 
-  ColorTarget*[A = ColorAtt] =
+  ColorTarget*[A] =
     RenderTarget[ColorOnly, A]
 
-  ColorDepthTarget*[A = ColorAtt] =
+  ColorDepthTarget*[A] =
     RenderTarget[ColorDepth, A]
 
   DepthTarget* =

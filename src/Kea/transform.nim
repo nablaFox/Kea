@@ -98,6 +98,16 @@ proc scaleMatrix*(transform: Transform): Mat4 =
     [0.0, 0.0, 0.0, 1.0],
   ]
 
+proc model*(transform: Transform): Mat4 =
+  let
+    trans = transform.transMatrix
+
+    scale = transform.scaleMatrix
+
+    rot = transform.rotMatrix
+
+  trans * rot * scale
+
 proc model*(transform: var Transform): Mat4 =
   if not transform.dirty:
     return transform.cachedMatrix
