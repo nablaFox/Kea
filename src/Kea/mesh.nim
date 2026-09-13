@@ -20,6 +20,9 @@ proc new*(
   vertexCount: Natural,
   indexCount: Natural
 ): Mesh =
+  doAssert vertexCount.uint64 <= high(uint32).uint64
+  doAssert indexCount.uint64 <= high(GLsizei).uint64
+
   let (vertexOffset, indexOffset) = allocator
     .allocate(
       vertexCount.uint32,
@@ -53,6 +56,9 @@ proc update*(
 
   doAssert uvs.len == 0 or uvs.len == mesh.vertexCount,
     "UV count must match the mesh vertex count"
+
+  doAssert indices.len == 0 or indices.len == mesh.indexCount,
+    "Index count must match the mesh index count"
 
   mesh.allocator.uploadPositions(mesh.vertexOffset, positions)
   mesh.allocator.uploadNormals(mesh.vertexOffset, normals)
@@ -107,8 +113,8 @@ proc draw*(mesh: Mesh, topology: Topology) =
     GLint(mesh.vertexOffset),
   )
 
-proc vertexCount*(mesh: Mesh): int =
+proc vertexCount*(mesh: Mesh): Natural =
   mesh.vertexCount
 
-proc indexCount*(mesh: Mesh): int =
+proc indexCount*(mesh: Mesh): Natural =
   mesh.indexCount

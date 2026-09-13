@@ -76,9 +76,12 @@ proc render*(
   camera: Camera,
   light: RectLight
 ) =
-  let
-    (width, height) = target.size
+  let (width, height) = target.size
 
+  if width <= 0 or height <= 0:
+    return
+
+  let
     aspect = target.aspect
 
     items = collect:
@@ -176,7 +179,7 @@ proc render*(
     proc frag(uv: Vec2): tuple[
       UN: Vec3,
       SN: Vec3
-    ] = 
+    ] =
       result.UN = [0.0, 0.0, 0.0]
       result.SN = [0.0, 0.0, 0.0]
 
@@ -194,7 +197,7 @@ proc render*(
     proc frag(uv: Vec2): tuple[
       UN: Vec3,
       SN: Vec3
-    ] = 
+    ] =
       result.UN = [0.0, 0.0, 0.0]
       result.SN = [0.0, 0.0, 0.0]
 

@@ -34,8 +34,8 @@ proc new*(
   x: float32 = 0.0,
   y: float32 = 0.0,
   z: float32 = 0.0,
-  pitch: float32 = 0.0,
   yaw: float32 = 0.0,
+  pitch: float32 = 0.0,
   roll: float32 = 0.0,
   scale: Vec3 = vec3(1.0),
 ): Transform =

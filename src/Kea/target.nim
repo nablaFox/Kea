@@ -104,6 +104,15 @@ proc initializeFramebuffer[
   K: static RenderTargetKind;
   A: tuple;
 ](target: RenderTarget[K, A]) =
+  var oldRead, oldDraw: GLint
+
+  glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, addr oldRead)
+  glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, addr oldDraw)
+
+  defer:
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, oldRead.GLuint)
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, oldDraw.GLuint)
+
   glGenFramebuffers(
     1,
     addr target.framebuffer,
@@ -161,8 +170,6 @@ proc initializeFramebuffer[
 
   let status =
     glCheckFramebufferStatus(GL_FRAMEBUFFER)
-
-  glBindFramebuffer(GL_FRAMEBUFFER, 0)
 
   doAssert status == GL_FRAMEBUFFER_COMPLETE,
     "Framebuffer is incomplete: " & $(status.uint32)
@@ -280,6 +287,16 @@ proc clear*[
   elif K == DepthOnly:
     glClearDepth(depth.GLdouble)
     glClear(GL_DEPTH_BUFFER_BIT)
+
+proc width*[K: static RenderTargetKind; A: tuple](
+  target: RenderTarget[K, A]
+): int32 =
+  target.size.width
+
+proc height*[K: static RenderTargetKind; A: tuple](
+  target: RenderTarget[K, A]
+): int32 =
+  target.size.height
 
 proc aspect*[K: static RenderTargetKind; A: tuple](
   target: RenderTarget[K, A]

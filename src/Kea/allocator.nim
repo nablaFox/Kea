@@ -146,6 +146,8 @@ proc allocate*(
     allocator.nextIndexOffset
   )
 
+  doAssert allocator.nextVertexOffset <= high(GLint).uint32
+
   allocator.nextVertexOffset += vertexCount
   allocator.nextIndexOffset += indexCount
 

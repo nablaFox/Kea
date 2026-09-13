@@ -116,7 +116,7 @@ proc localTypes(body: NimNode): seq[NimNode] =
       return
 
     of nnkLetSection, nnkVarSection:
-      for definition in node: 
+      for definition in node:
         if definition.kind == nnkIdentDefs:
           for index in 0 ..< definition.len - 2:
             types.add definition[index].getTypeInst
@@ -1027,7 +1027,7 @@ proc fragGlslImpl*(vert, frag: NimNode): string =
       else: "in "
 
     result.add qualifier & declaration(
-      param.typ, 
+      param.typ,
       if isVarying: name.varyName else: name
     )
 
@@ -1036,7 +1036,7 @@ proc fragGlslImpl*(vert, frag: NimNode): string =
     .join("\n")
 
   result.add body.emitMain(
-    stage = FragmentStage, 
+    stage = FragmentStage,
     varyings = varyings
   )
 

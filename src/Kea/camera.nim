@@ -67,31 +67,41 @@ proc up*(camera: Camera): Vec3 =
   camera.transform.rotation * WorldUp
 
 proc view*(camera: Camera): Mat4 =
-  let rotTransposed = camera
-    .transform
-    .rotMatrix
-    .transpose
+  let
+    rotTransposed = camera
+      .transform
+      .rotMatrix
+      .transpose
 
-  let transInverted = transform.new(
-    position = - camera.positioned
-  )
+    transInverted = transform.new(
+      position = - camera.positioned
+    )
 
   rotTransposed * transInverted.transMatrix
 
 proc proj*(camera: Camera, aspect: float32): Mat4 =
-  let near = camera.near
-  let far = camera.far
+  let
+    near = camera.near
+    far = camera.far
+
+  doAssert aspect > 0.0'f
+  doAssert far > near
+  doAssert near > 0.0'f
 
   case camera.kind
   of Perspective:
-    let fov = camera.fov
-    let top = tan(fov * 0.5 * (PI / 180.0)) * near
-    let right = top * aspect
+    let
+      fov = camera.fov
+      top = tan(fov * 0.5 * (PI / 180.0)) * near
+      right = top * aspect
 
-    let a = float32(near / right)
-    let b = near / top
-    let c = (far + near) / (near - far)
-    let d = (2.0 * far * near) / (near - far)
+    doAssert fov > 0.0'f and fov < 180.0'f
+
+    let
+      a = float32(near / right)
+      b = near / top
+      c = (far + near) / (near - far)
+      d = (2.0 * far * near) / (near - far)
 
     [
       [a,   0.0, 0.0,  0.0],
@@ -101,13 +111,17 @@ proc proj*(camera: Camera, aspect: float32): Mat4 =
     ]
 
   of Orthographic:
-    let top = camera.size
-    let right = top * aspect
+    let
+      top = camera.size
+      right = top * aspect
 
-    let a = float32(1.0 / right)
-    let b = 1.0 / top
-    let c = 2.0 / (near - far)
-    let d = (far + near) / (near - far)
+    doAssert top > 0.0'f
+
+    let
+      a = float32(1.0 / right)
+      b = 1.0 / top
+      c = 2.0 / (near - far)
+      d = (far + near) / (near - far)
 
     [
       [a,   0.0, 0.0, 0.0],

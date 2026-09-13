@@ -44,7 +44,7 @@ iterator frames*(kea: Kea): Frame =
       mouse: mouse,
       aspect: kea.aspect,
       backbuffer: backbuffer,
-      width: kea.width,
-      height: kea.height,
+      width: backbuffer.width,
+      height: backbuffer.height,
       present: proc() = kea.present()
     )

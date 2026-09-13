@@ -177,7 +177,7 @@ proc mesh*(
 proc texture*(
   res: Resources,
   data: string,
-  width, height: Natural,
+  width, height: Positive,
   format: static TextureFormat,
   options: TextureOptions
 ): Texture[format] =
@@ -194,7 +194,7 @@ proc texture*(
   res: Resources,
   key: string,
   data: string,
-  width, height: Natural,
+  width, height: Positive,
   format: static TextureFormat,
   options: TextureOptions
 ): Texture[format] =
@@ -225,7 +225,7 @@ proc texture*(
 proc texture*(
   res: Resources,
   data: openArray[float32],
-  width, height: Natural,
+  width, height: Positive,
   format: static TextureFormat,
   options: TextureOptions,
 ): Texture[format] =
@@ -242,7 +242,7 @@ proc texture*(
   res: Resources,
   key: string,
   data: openArray[float32],
-  width, height: Natural,
+  width, height: Positive,
   format: static TextureFormat,
   options: TextureOptions,
 ): Texture[format] =
@@ -268,7 +268,7 @@ proc texture*(
 
 proc texture*(
   res: Resources,
-  width, height: Natural,
+  width, height: Positive,
   format: static TextureFormat,
   options: TextureOptions,
 ): Texture[format] =
@@ -283,7 +283,7 @@ proc texture*(
 proc texture*(
   res: Resources,
   key: string,
-  width, height: Natural,
+  width, height: Positive,
   format: static TextureFormat,
   options: TextureOptions,
 ): Texture[format] =
@@ -308,7 +308,7 @@ proc texture*(
 proc texture*(
   res: Resources,
   data: pointer,
-  width, height: Natural,
+  width, height: Positive,
   format: static TextureFormat,
   options: TextureOptions
 ): Texture[format] =
@@ -325,7 +325,7 @@ proc texture*(
   res: Resources,
   key: string,
   data: pointer,
-  width, height: Natural,
+  width, height: Positive,
   format: static TextureFormat,
   options: TextureOptions
 ): Texture[format] =
@@ -468,6 +468,7 @@ macro render*[G, M](
   vert, frag: typed,
   items: seq[RenderItem[M]],
   globals: G,
+  colorOptions: TextureOptions = DataTextureOptions,
   cullMode: CullMode = CullDisabled,
   depthTest: static DepthTest = DepthLess,
   depthWrite: bool = true
@@ -478,6 +479,7 @@ macro render*[G, M](
     h = genSym(nskLet, "height")
     testMode = newLit(depthTest)
     attachments = newNimNode(nnkTupleConstr)
+    options = genSym(nskLet, "colorOptions")
 
   for field in attachmentsType(frag):
     var format: NimNode
@@ -502,7 +504,7 @@ macro render*[G, M](
           `w`,
           `h`,
           `format`,
-          DataTextureOptions
+          `options`
         )
 
       attachments.add newColonExpr(field[index].strVal.ident, attachment)
@@ -529,6 +531,7 @@ macro render*[G, M](
         `resourceStore` = `res`
         `w` = `width`
         `h` = `height`
+        `options` = `colorOptions`
         key = `target`
 
         r = `resourceStore`.renderer(
@@ -540,7 +543,8 @@ macro render*[G, M](
 
       var t = cached(`resourceStore`.targets, key, `createTarget`)
 
-      if t.size != (`w`.int32, `h`.int32):
+      if t.size != (`w`.int32, `h`.int32) or
+         t.atts[0].options != `options`:
         t = `createTarget`
         `resourceStore`.targets[key] = CacheEntry[typeof(t)](value: t)
 
@@ -555,7 +559,8 @@ macro render*[G](
   target: string,
   width, height: Positive,
   frag: typed,
-  globals: G
+  globals: G,
+  colorOptions: TextureOptions = DataTextureOptions
 ): untyped =
   result = quote do:
     block:
@@ -563,6 +568,7 @@ macro render*[G](
       resourceStore.render(
         `renderer`, `target`, `width`, `height`, fullscreenVert, `frag`,
         @[resourceStore.quad], `globals`,
+        colorOptions = `colorOptions`,
         cullMode = CullDisabled,
         depthTest = DepthDisabled,
         depthWrite = false

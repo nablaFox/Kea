@@ -70,8 +70,11 @@ proc `=destroy`[F: static TextureFormat](texture: var TextureObj[F]) =
 
     texture.kea = nil
 
-proc GLenum(format: TextureFormat): GLenum =
-  case format
+proc format*[F: static TextureFormat](texture: Texture[F]): TextureFormat =
+  F
+
+proc glFormat*[F: static TextureFormat](texture: Texture[F]): GLenum =
+  case F
   of Rgba8Linear:
     GL_RGBA8
 
@@ -115,9 +118,7 @@ proc bytesPerComponent*(format: TextureFormat): int =
     1
   of R32Float, Rg32Float, Rgb32Float, Rgba32Float:
     4
-  of Depth24:
-    3
-  of Depth32Float:
+  of Depth24, Depth32Float:
     4
 
 proc bytesPerPixel*(format: TextureFormat): int =
@@ -184,12 +185,18 @@ proc info(format: TextureFormat): TextureInfo =
 proc createTexture[F: static TextureFormat](
   kea: Kea,
   data: pointer,
-  width, height: Natural,
+  width, height: Positive,
   info: TextureInfo,
   options: TextureOptions,
 ): Texture[F] =
   doAssert width > 0
   doAssert height > 0
+
+  var maxSize: GLint
+  glGetIntegerv(GL_MAX_TEXTURE_SIZE, addr maxSize)
+
+  doAssert width <= maxSize.int
+  doAssert height <= maxSize.int
 
   system.new(result)
 
@@ -256,7 +263,7 @@ proc createTexture[F: static TextureFormat](
 proc new*(
   kea: Kea,
   data: string,
-  width, height: Natural,
+  width, height: Positive,
   format: static TextureFormat,
   options: TextureOptions,
 ): Texture[format] =
@@ -276,7 +283,7 @@ proc new*(
 proc new*(
   kea: Kea,
   data: openArray[float32],
-  width, height: Natural,
+  width, height: Positive,
   format: static TextureFormat,
   options: TextureOptions,
 ): Texture[format] =
@@ -298,7 +305,7 @@ proc new*(
 
 proc new*(
   kea: Kea,
-  width, height: Natural,
+  width, height: Positive,
   format: static TextureFormat,
   options: TextureOptions
 ): Texture[format] =
@@ -314,7 +321,7 @@ proc new*(
 proc new*(
   kea: Kea,
   data: pointer,
-  width, height: Natural,
+  width, height: Positive,
   format: static TextureFormat,
   options: TextureOptions
 ): Texture[format] =
@@ -333,7 +340,7 @@ proc update*[F: static TextureFormat](
   texture: Texture[F],
   data: pointer,
   x, y: Natural,
-  width, height: Natural
+  width, height: Positive
 ) =
   doAssert data != nil
   doAssert width > 0
@@ -403,10 +410,10 @@ proc options*[F](texture: Texture[F]): TextureOptions =
 proc id*[F](texture: Texture[F]): GLuint =
   texture.id
 
-proc width*[F](texture: Texture[F]): int =
+proc width*[F](texture: Texture[F]): Positive =
   texture.width
 
-proc height*[F](texture: Texture[F]): int =
+proc height*[F](texture: Texture[F]): Positive =
   texture.height
 
 proc size*[F](texture: Texture[F]): array[2, float32] =
@@ -448,7 +455,7 @@ proc residentImageHandle*[F: static TextureFormat](
       0,                   # mip level
       false,               # not layered
       0,                   # layer
-      F.GLenum,
+      texture.glFormat
     )
 
     doAssert texture.imageHandle != 0,

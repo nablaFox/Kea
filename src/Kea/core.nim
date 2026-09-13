@@ -39,8 +39,8 @@ proc rebaseMouse(kea: Kea) =
   kea.mouse.delta = [0.0'f, 0.0]
 
 proc init*(
-  width: Natural,
-  height: Natural,
+  width: Positive,
+  height: Positive,
   title: string,
   resizable = false,
   decorated = false,

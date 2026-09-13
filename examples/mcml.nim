@@ -2,7 +2,7 @@ import Kea, std/[random, sequtils]
 
 type
   Mcml = object
-    resolution: Natural
+    resolution: Positive
     absorption: float32
     scattering: float32
     anisotropy: float32
