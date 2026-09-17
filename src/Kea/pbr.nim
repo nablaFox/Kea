@@ -41,8 +41,7 @@ type
     items: OrderedTable[string, PBRItem]
 
     frame: uint64
-    prevViewProj: Mat4
-    historyWidth, historyHeight: int
+    prevViewProjJitter: Mat4
     history: Texture[Rgb32Float]
 
     ltcMagnitudeFresnelLut: Texture[Rg32Float]
@@ -121,15 +120,38 @@ proc render*(
 
     proj = camera.proj aspect
 
+    jitterUv: Vec2 = block:
+      proc halton(i, base: int): float32 =
+        var
+          f = 1.0'f
+          r = 0.0'f
+          x = i
+
+        while x > 0:
+          f /= base.float32
+          r += f * (x mod base).float32
+          x = x div base
+
+        r
+
+      let i = int(pbr.frame mod 16) + 1
+
+      [
+        (halton(i, 2) - 0.5'f) / width.float32,
+        (halton(i, 3) - 0.5'f) / height.float32
+      ]
+
+    jitter = [2'f * jitterUv.x, 2'f * jitterUv.y, 0'f].transMatrix
+
   if pbr.frame == 0:
-    pbr.prevViewProj = proj * view
+    pbr.prevViewProjJitter = proj * view
 
   let gbuffer = block:
     proc vert(
       vert: Vertex,
       model, prevModel: Mat4,
       nmat: Mat3,
-      view, proj, jitter, prevViewProj: Mat4
+      view, proj, prevViewProjJitter, jitter: Mat4
     ): tuple[
       pos: Vec4,
       worldNormal: Vec3,
@@ -139,13 +161,22 @@ proc render*(
     ] =
       let
         P = model * vert.position.hom
-        pos = proj * view * P
 
-      result.pos = jitter * pos
+        currClip =
+          proj *
+          view *
+          P
+
+        prevClip =
+          prevViewProjJitter *
+          prevModel *
+          vert.position.hom
+
+      result.pos = jitter * currClip
       result.worldPosition = P.xyz
       result.worldNormal = nmat * vert.normal
-      result.currClip = pos
-      result.prevClip = prevViewProj * prevModel * vert.position.hom
+      result.currClip = currClip
+      result.prevClip = prevClip
 
     proc frag(
       worldNormal: Vec3,
@@ -161,72 +192,49 @@ proc render*(
     ): tuple[
       analytic: Vec3,
       position: Vec3,
-      normal: Vec3,
-      albedo: Vec3,
-      roughness: float32,
-      metallic: float32,
-      motion: Vec2
+      motion: Vec2,
+      normalRoughness: Vec4,
+      albedoMetallic: Vec4,
+      depth: float32
     ] =
-      proc texelCenteredUv(size: Vec2, x, y: float32): Vec2 =
-        ([x, y] * (size - 1.0'f) + 0.5'f) / size
-
-      # TODO: add support for block expressions
       let
         P = worldPosition
         V = (eye - P).normalize
         N = worldNormal.normalize.face(V)
-        NdotV = dot(N, V)
-
-        uv = ltcInverseMatrixLut.size.texelCenteredUv(
-          roughness,
-          (1 - clamp(NdotV, 0, 1)).sqrt
-        )
-
-        shape = ltcInverseMatrixLut.sample(uv)
-        terms = ltcMagnitudeFresnelLut.sample(uv).xy
-
-        currUv = (currClip.xy / currClip.w) * 0.5'f + 0.5'f
-        prevUv = (prevClip.xy / prevClip.w) * 0.5'f + 0.5'f
 
       result.position = worldPosition
-      result.normal = worldNormal
-      result.albedo = albedo
-      result.roughness = roughness
-      result.metallic = metallic
-      result.motion = currUv - prevUv
-      result.analytic = light.radiance(
-        P, N, V,
-        albedo,
-        metallic,
-        ltcShape = shape,
-        ltcAmplitude = terms.x,
-        ltcFresnelWeight = terms.y
-      )
 
-    let jitter = block:
-      proc halton(i, base: int): float32 =
-        var
-          f = 1.0'f
-          r = 0.0'f
-          x = i
+      result.albedoMetallic = [albedo.x, albedo.y, albedo.z, metallic]
 
-        while x > 0:
-          f /= base.float32
-          r += f * (x mod base).float32
-          x = x div base
+      result.normalRoughness = [N.x, N.y, N.z, roughness]
 
-        r
+      result.depth = currClip.w
 
-      let 
-        i = int(pbr.frame mod 16) + 1
+      result.motion = block:
+        let
+          currUv = (currClip.xy / currClip.w) * 0.5'f + 0.5'f
+          prevUv = (prevClip.xy / prevClip.w) * 0.5'f + 0.5'f
 
-        trans = [
-          2'f * (halton(i, 2) - 0.5'f) / width.float32,
-          2'f * (halton(i, 3) - 0.5'f) / height.float32,
-          0'f
-        ]
+        currUv - prevUv
 
-      trans.transMatrix
+      result.analytic = block:
+        let
+          size = ltcInverseMatrixLut.size
+          x = roughness
+          y = 1 - clamp(dot(N, V), 0, 1).sqrt
+          uv = ([x, y] * (size - 1.0'f) + 0.5'f) / size
+
+          shape = ltcInverseMatrixLut.sample(uv)
+          terms = ltcMagnitudeFresnelLut.sample(uv).xy
+
+        light.radiance(
+          P, N, V,
+          albedo,
+          metallic,
+          ltcShape = shape,
+          ltcAmplitude = terms.x,
+          ltcFresnelWeight = terms.y
+        )
 
     pbr.res.render(
       renderer = "pbr/geometry-pass",
@@ -244,7 +252,7 @@ proc render*(
         light: light,
         ltcInverseMatrixLut: pbr.ltcInverseMatrixLut,
         ltcMagnitudeFresnelLut: pbr.ltcMagnitudeFresnelLut,
-        prevViewProj: pbr.prevViewProj
+        prevViewProjJitter: pbr.prevViewProjJitter
       )
     )
 
@@ -301,8 +309,8 @@ proc render*(
     ): tuple[pixel: Vec3] =
       let
         U = analytic.sample(uv).xyz
-        S = shadowed.sample(uv).xyz
-        W = S / unshadowed.sample(uv).xyz
+        W = shadowed.sample(uv).xyz /
+          unshadowed.sample(uv).xyz
 
       result.pixel = U * W
 
@@ -312,6 +320,7 @@ proc render*(
       width = width,
       height = height,
       frag = frag,
+      colorOptions = (pixel: LinearTextureOptions),
       globals = (
         analytic: gbuffer.atts.analytic,
         unshadowed: filtered.atts.unshadowed,
@@ -322,29 +331,128 @@ proc render*(
   let taa = block:
     proc frag(
       uv: Vec2,
-      historyValid: bool,
-      current: Texture[Rgb32Float],
       motion: Texture[Rg32Float],
+      jitterUv: Vec2,
+      currentColor: Texture[Rgb32Float],
+      currentDepth: Texture[R32Float],
+      historyValid: bool,
       history: Texture[Rgb32Float]
     ): tuple[pixel: Vec3] =
-      let now = current.sample(uv).xyz
+      let 
+        currentUv = uv + jitterUv
+        current = currentColor.sample(currentUv).xyz
 
       if not historyValid:
-        result.pixel = now
+        result.pixel = current
         return
 
-      let
-        alpha = 0.9'f
-        motionVec = motion.sample(uv).xy
-        historyUv = uv - motionVec
-        history = history.sample(historyUv).xyz
+      # velocity dilation
+      let velocity = block:
+        let
+          size = currentDepth.size
+          center = (currentUv * size).floor
+
+        var 
+          z = 1e30'f
+          p = center
+
+        # TODO: add support for iterators
+        for x in -1 .. 1:
+          for y in -1 .. 1:
+            let 
+              q = clamp(
+                center + [x.float32, y.float32],
+                [0.0'f, 0.0],
+                size - 1'f
+              )
+
+              depth = currentDepth.texelFetch(q, 0).x
+
+            if depth > 0'f and depth < z:
+              z = depth
+              p = q
+
+        motion.texelFetch(p, 0).xy
+
+      let historyUv = uv - velocity
 
       if historyUv.x < 0 or historyUv.x > 1 or
-         historyUv.y < 0 or historyUv.y > 1:
-        result.pixel = now
-        return
+          historyUv.y < 0 or historyUv.y > 1:
+        result.pixel = current
+        return 
 
-      result.pixel = now * (1 - alpha) + history * alpha
+      # sd and mean in YCoCg space over 3x3 neighb.
+      let (sd, mean) = block:
+        let
+          size = currentColor.size
+          center = (currentUv * size).floor
+
+        var
+          mean = [0.0'f, 0.0, 0.0]
+          m2 = [0.0'f, 0.0, 0.0]
+
+        # TODO: add support for iterators
+        for x in -1 .. 1:
+          for y in -1 .. 1:
+            let
+              q = clamp(
+                center + [x.float32, y.float32],
+                [0.0'f, 0.0],
+                size - 1'f
+              )
+
+              color = currentColor
+                .texelFetch(q, 0)
+                .xyz
+                .rgbToYCoCg
+
+            mean += color
+            m2 += color * color 
+
+        mean /= 9'f
+        m2 /= 9'f
+
+        (
+          sd: max(m2 - mean * mean, 0).sqrt,
+          mean: mean
+        )
+
+      # variance direction-preserving clipping
+      let clipped = block:
+        let
+          gamma = 1.5'f
+          extent = gamma * sd + vec3(1e-5'f)
+          H = history.sample(historyUv).xyz.rgbToYCoCg
+          delta = H - mean
+
+          distance = min(
+            extent.x / max(abs(delta.x), 1e-5'f),
+            min(
+              extent.y / max(abs(delta.y), 1e-5'f),
+              extent.z / max(abs(delta.z), 1e-5'f)
+            )
+          )
+
+        mean + delta * min(distance, 1'f)
+
+      let color = current.rgbToYCoCg
+
+      # adaptive temporal blend
+      let alpha = block:
+        let
+          d = clamp(
+            abs(color.x - clipped.x) /
+              max(max(color.x, clipped.x), 0.2'f),
+            0'f,
+            1'f
+          )
+
+          weight = (1 - d) * (1 - d)
+
+        lerp(0.85, 0.95, weight)
+
+      result.pixel = ((1 - alpha) * color + alpha * clipped)
+        .ycocgToRgb
 
     let historyValid =
       pbr.history != nil and
@@ -357,14 +465,16 @@ proc render*(
       width = width,
       height = height,
       frag = frag,
-      colorOptions = LinearTextureOptions,
+      colorOptions = (pixel: LinearTextureOptions),
       globals = (
-        current: lit.atts.pixel,
         motion: gbuffer.atts.motion,
+        jitterUv: jitterUv,
+        currentColor: lit.atts.pixel,
+        currentDepth: gbuffer.atts.depth,
         historyValid: historyValid,
         history:
           if historyValid: pbr.history
-          else: lit.atts.pixel,
+          else: lit.atts.pixel
       )
     )
 
@@ -392,9 +502,7 @@ proc render*(
   for item in pbr.items.values:
     item.prevModel = item.transform.model
 
-  pbr.prevViewProj = proj * view
-  pbr.historyWidth = width
-  pbr.historyHeight = height
+  pbr.prevViewProjJitter = proj * view
   pbr.history = taa.atts.pixel
   pbr.frame += 1
 

@@ -22,14 +22,20 @@ template b*(v: Vec3 | Vec4): untyped =
 template a*(v: Vec4): untyped =
   v[3]
 
-proc sRGB*(color: Color): Color =
-  for i in 0 ..< 3:
-    if color[i] <= 0.0031308'f:
-      result[i] = 12.92'f * color[i]
-    else:
-      result[i] =
-        1.055'f * pow(color[i], 1.0'f / 2.4'f) - 0.055'f
-
 proc gamma*(color: Color, exponent: float32 = 2.2): Color =
   for i in 0 ..< 3:
     result[i] = pow(color[i], 1.0'f / exponent)
+
+proc rgbToYCoCg*(c: Color): Color =
+  [
+    0.25'f * c.x + 0.5'f * c.y + 0.25'f * c.z,
+    0.5'f * c.x - 0.5'f * c.z,
+    -0.25'f * c.x + 0.5'f * c.y - 0.25'f * c.z
+  ]
+
+proc ycocgToRgb*(c: Color): Color =
+  [
+    c.x + c.y - c.z,
+    c.x + c.z,
+    c.x - c.y - c.z
+  ]

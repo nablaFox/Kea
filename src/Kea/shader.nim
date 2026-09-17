@@ -373,7 +373,9 @@ proc intrinsicName(symbol: NimNode): string =
     (bindSym"sqrt", "sqrt"),
     (bindSym"invsqrt", "inversesqrt"),
     (bindSym"vec", "vec"),
+    (bindSym"vec2", "vec2"),
     (bindSym"vec3", "vec3"),
+    (bindSym"vec4", "vec4"),
     (bindSym"mix", "mix"),
     (bindSym"abs", "abs"),
     (bindSym"max", "max"),
@@ -580,6 +582,18 @@ proc emitBody(
           node[1].emitExpr & ", ivec2(" &
           node[2].emitExpr & "), " &
           node[3].emitExpr & ")"
+
+      of "vec", "vec2", "vec3", "vec4":
+        let constructor = node.getTypeInst.glslType
+
+        if constructor notin ["vec2", "vec3", "vec4"]:
+          error "unsupported vector constructor: " & constructor, node
+
+        let args = node.toSeq[1 .. ^1]
+          .mapIt(it.emitExpr)
+          .join(", ")
+
+        result = constructor & "(" & args & ")"
 
       else:
         let args = node.toSeq[1..^1]

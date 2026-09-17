@@ -468,7 +468,7 @@ macro render*[G, M](
   vert, frag: typed,
   items: seq[RenderItem[M]],
   globals: G,
-  colorOptions: TextureOptions = DataTextureOptions,
+  colorOptions: typed = default(tuple[]),
   cullMode: CullMode = CullDisabled,
   depthTest: static DepthTest = DepthLess,
   depthWrite: bool = true
@@ -479,7 +479,12 @@ macro render*[G, M](
     h = genSym(nskLet, "height")
     testMode = newLit(depthTest)
     attachments = newNimNode(nnkTupleConstr)
-    options = genSym(nskLet, "colorOptions")
+    suppliedOptions = genSym(nskLet, "suppliedOptions")
+    options = genSym(nskLet, "options")
+    resolvedOptions = newNimNode(nnkTupleConstr)
+    targetVar = genSym(nskVar, "target")
+
+  var optionsChanged = newLit(false)
 
   for field in attachmentsType(frag):
     var format: NimNode
@@ -498,16 +503,34 @@ macro render*[G, M](
       error "Unsupported render target output: " & field[^2].repr, field[^2]
 
     for index in 0 ..< field.len - 2:
-      let attachment = quote do:
-        textureModule.new(
-          `resourceStore`.kea,
-          `w`,
-          `h`,
-          `format`,
-          `options`
-        )
+      let
+        name = field[index].strVal.ident
 
-      attachments.add newColonExpr(field[index].strVal.ident, attachment)
+        selectedOptions = quote do:
+          (block:
+            when compiles(`suppliedOptions`.`name`):
+              `suppliedOptions`.`name`
+            else:
+              DataTextureOptions
+          )
+
+        attachment = quote do:
+          textureModule.new(
+            `resourceStore`.kea,
+            `w`,
+            `h`,
+            `format`,
+            `options`.`name`
+          )
+
+        changed = quote do:
+          `targetVar`.atts.`name`.options != `options`.`name`
+
+      resolvedOptions.add newColonExpr(name, selectedOptions)
+      attachments.add newColonExpr(name, attachment)
+      optionsChanged = newTree(
+        nnkInfix, ident"or", optionsChanged, changed
+      )
 
   let createTarget = quote do:
     when `testMode` == DepthDisabled:
@@ -531,7 +554,8 @@ macro render*[G, M](
         `resourceStore` = `res`
         `w` = `width`
         `h` = `height`
-        `options` = `colorOptions`
+        `suppliedOptions` = `colorOptions`
+        `options` = `resolvedOptions`
         key = `target`
 
         r = `resourceStore`.renderer(
@@ -541,17 +565,23 @@ macro render*[G, M](
           globals = typeof(`globals`)
         )
 
-      var t = cached(`resourceStore`.targets, key, `createTarget`)
+      var `targetVar` = cached(
+        `resourceStore`.targets, key, `createTarget`
+      )
 
-      if t.size != (`w`.int32, `h`.int32) or
-         t.atts[0].options != `options`:
-        t = `createTarget`
-        `resourceStore`.targets[key] = CacheEntry[typeof(t)](value: t)
+      if `targetVar`.size != (`w`.int32, `h`.int32) or
+         `optionsChanged`:
+        `targetVar` = `createTarget`
+        `resourceStore`.targets[key] =
+          CacheEntry[typeof(`targetVar`)](value: `targetVar`)
 
-      t.clear()
-      r.render(t, `items`, `globals`, `cullMode`, `testMode`, `depthWrite`)
+      `targetVar`.clear()
+      r.render(
+        `targetVar`, `items`, `globals`,
+        `cullMode`, `testMode`, `depthWrite`
+      )
 
-      t
+      `targetVar`
 
 macro render*[G](
   res: Resources,
@@ -560,7 +590,7 @@ macro render*[G](
   width, height: Positive,
   frag: typed,
   globals: G,
-  colorOptions: TextureOptions = DataTextureOptions
+  colorOptions: typed = default(tuple[]),
 ): untyped =
   result = quote do:
     block:

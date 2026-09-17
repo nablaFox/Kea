@@ -176,6 +176,18 @@ proc max*[C: static int](a: Vec[C], b: float32): Vec[C] =
   for i in 0..<C:
     result[i] = max(a[i], b)
 
+proc min*[C: static int](a, b: Vec[C]): Vec[C] =
+  for i in 0..<C:
+    result[i] = min(a[i], b[i])
+
+proc min*[C: static int](a: Vec[C], b: float32): Vec[C] =
+  for i in 0..<C:
+    result[i] = min(a[i], b)
+
+proc abs*[C: static int](v: Vec[C]): Vec[C] =
+  for i in 0..<C:
+    result[i] = v[i].abs
+
 proc sqrt*[C: static int](v: Vec[C]): Vec[C] =
   for i in 0..<C:
     result[i] = sqrt(v[i])

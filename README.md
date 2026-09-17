@@ -40,6 +40,7 @@ Area Light:
 Dynamic shadows:
 
 - https://research.nvidia.com/sites/default/files/pubs/2018-05_Combining-Analytic-Direct//I3D2018_combining.pdf
+- http://behindthepixels.io/assets/files/TemporalAA.pdf
 
 Others:
 

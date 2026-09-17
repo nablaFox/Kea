@@ -717,7 +717,7 @@ suite "shader body generation":
         keaOut_second = local - 1.0;
       }
     """
-    
+
     check expected.normalized in glsl.normalized
 
     check "keaTemp" notin glsl
@@ -781,7 +781,7 @@ suite "shader body generation":
       vec3 sd = keaTemp0;
       vec3 mean = keaTemp1;
       keaOut_pixel = sd + mean;
-    """  
+    """
 
     check expected.normalized in glsl.normalized
 
