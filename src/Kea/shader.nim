@@ -117,7 +117,7 @@ proc localTypes(body: NimNode): seq[NimNode] =
 
     of nnkLetSection, nnkVarSection:
       for definition in node:
-        if definition.kind == nnkIdentDefs:
+        if definition.kind in {nnkIdentDefs, nnkVarTuple}:
           for index in 0 ..< definition.len - 2:
             types.add definition[index].getTypeInst
 
@@ -482,6 +482,11 @@ proc emitBody(
   var
     usedNames = body.identifiers
     temporaryIndex = 0
+    tupleLocals: seq[tuple[
+      symbol: NimNode,
+      fields: seq[string],
+      targets: seq[string]
+    ]]
 
   proc emitExpr(
     node: NimNode,
@@ -521,6 +526,15 @@ proc emitBody(
 
     of nnkDotExpr:
       let field = node[1].strVal
+
+      for local in tupleLocals:
+        if node[0] == local.symbol:
+          let index = local.fields.find(field)
+
+          if index < 0:
+            error "unknown shader tuple field: " & field, node
+
+          return local.targets[index]
 
       if isShaderMain and node[0].eqIdent("result"):
         result =
@@ -585,6 +599,19 @@ proc emitBody(
       )
 
     of nnkBracketExpr:
+      for local in tupleLocals:
+        if node[0] == local.symbol:
+          if node.len != 2 or
+             node[1].kind notin {nnkIntLit..nnkUInt64Lit}:
+            error "shader tuple indexing requires a constant integer", node
+
+          let index = int(node[1].intVal)
+
+          if index < 0 or index >= local.targets.len:
+            error "shader tuple index out of bounds", node
+
+          return local.targets[index]
+
       result = node[0].emitExpr(7) & "[" & node[1].emitExpr & "]"
 
     of nnkBracket:
@@ -678,8 +705,14 @@ proc emitBody(
 
   proc emitStmt(node: NimNode): string
 
-  proc emitInto(target: string, value: NimNode): string =
+  proc emitInto(targets: seq[string], value: NimNode): string =
     case value.kind
+    of nnkBlockExpr:
+      if value[0].kind != nnkEmpty:
+        error "named block expressions are not supported", value
+
+      result = emitInto(targets, value[^1])
+
     of nnkIfExpr:
       for index, branch in value:
         if index > 0:
@@ -696,7 +729,7 @@ proc emitBody(
           error "unsupported shader conditional branch", branch
 
         result.add "{\n"
-        result.add emitInto(target, branch[^1])
+        result.add emitInto(targets, branch[^1])
         result.add "}"
 
       result.add "\n"
@@ -710,21 +743,32 @@ proc emitBody(
       for index in 0 ..< value.len - 1:
         result.add value[index].emitStmt
 
-      result.add emitInto(target, value[^1])
+      result.add emitInto(targets, value[^1])
       result.add "}\n"
+
+    of nnkTupleConstr:
+      if targets.len != value.len:
+        error "tuple destination count mismatch", value
+
+      for index, field in value:
+        let component =
+          if field.kind == nnkExprColonExpr: field[1]
+          else: field
+
+        result.add emitInto(@[targets[index]], component)
 
     of nnkHiddenStdConv, nnkHiddenSubConv,
        nnkHiddenAddr, nnkHiddenDeref:
-      result = emitInto(target, value[^1])
-
-    of nnkBlockExpr:
-      if value[0].kind != nnkEmpty:
-        error "named block expressions are not supported", value
-
-      result = emitInto(target, value[^1])
+      result = emitInto(targets, value[^1])
 
     else:
-      result = target & " = " & value.emitExpr & ";\n"
+      if targets.len != 1:
+        error "expected a tuple constructor for destructuring", value
+
+      result = targets[0] & " = " & value.emitExpr & ";\n"
+
+  proc emitInto(target: string, value: NimNode): string =
+    emitInto(@[target], value)
 
   proc emitStmt(node: NimNode): string =
     case node.kind
@@ -745,6 +789,38 @@ proc emitBody(
 
     of nnkLetSection, nnkVarSection:
       for definition in node:
+        if definition.kind == nnkVarTuple:
+          let count = definition.len - 2
+          var temporaries: seq[string]
+
+          for index in 0 ..< count:
+            let
+              symbol = definition[index]
+              typ = symbol.getTypeInst
+              temporary = freshName()
+
+            validateUserName(symbol)
+
+            if typ.isTextureType:
+              error "local texture declarations are not supported", symbol
+
+            temporaries.add temporary
+
+            result.add declaration(typ, temporary)
+
+          result.add emitInto(temporaries, definition[^1])
+
+          for index in 0 ..< count:
+            let
+              symbol = definition[index]
+              name = symbol.strVal
+              typ = symbol.getTypeInst
+
+            result.add declaration(typ, name)
+            result.add name & " = " & temporaries[index] & ";\n"
+
+          continue
+
         let value = definition[^1]
 
         for index in 0 ..< definition.len - 2:
@@ -752,6 +828,37 @@ proc emitBody(
             symbol = definition[index]
             typ = symbol.getTypeInst
             name = symbol.strVal
+
+          let impl = typ.getTypeImpl
+
+          if impl.kind == nnkTupleTy:
+            var
+              fields: seq[string]
+              targets: seq[string]
+
+            for field in impl.fields:
+              if field.typ.getTypeImpl.kind == nnkTupleTy:
+                error "nested shader tuples are not supported", symbol
+
+              if field.typ.isTextureType:
+                error "local texture declarations are not supported", symbol
+
+              let temporary = freshName()
+
+              fields.add field.name.strVal
+              targets.add temporary
+              result.add declaration(field.typ, temporary)
+
+            tupleLocals.add (
+              symbol: symbol,
+              fields: fields,
+              targets: targets
+            )
+
+            if value.kind != nnkEmpty:
+              result.add emitInto(targets, value)
+
+            continue
 
           validateUserName(symbol)
 

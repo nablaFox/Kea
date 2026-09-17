@@ -693,32 +693,34 @@ suite "shader body generation":
     check "float doubled = value * 2.0;" in glsl
     check "keaOut_pixel = doubled;" in glsl
 
-    test "lowers block assignments and preserves separate scopes":
-      let glsl = fragGlsl(
-        positionOnlyVertex,
+  test "lowers block assignments and preserves separate scopes":
+    let glsl = fragGlsl(
+      positionOnlyVertex,
 
-        proc(value: float32): tuple[first, second: float32] =
-          result.first = block:
-            let local = value * 2.0
-            local + 1.0
+      proc(value: float32): tuple[first, second: float32] =
+        result.first = block:
+          let local = value * 2.0
+          local + 1.0
 
-          result.second = block:
-            let local = value * 3.0
-            local - 1.0
-      )
+        result.second = block:
+          let local = value * 3.0
+          local - 1.0
+    )
 
-      check """
-        {
-          float local = value * 2.0;
-          keaOut_first = local + 1.0;
-        }
-        {
-          float local = value * 3.0;
-          keaOut_second = local - 1.0;
-        }
-      """.normalized in glsl.normalized
+    let expected = """
+      {
+        float local = value * 2.0;
+        keaOut_first = local + 1.0;
+      }
+      {
+        float local = value * 3.0;
+        keaOut_second = local - 1.0;
+      }
+    """
+    
+    check expected.normalized in glsl.normalized
 
-      check "keaTemp" notin glsl
+    check "keaTemp" notin glsl
 
   test "lowers block initializers through a temporary":
     let glsl = fragGlsl(
@@ -732,7 +734,7 @@ suite "shader body generation":
         result.pixel = doubled
     )
 
-    check """
+    let expected = """
       float keaTemp0;
       {
         float local = value + 1.0;
@@ -740,7 +742,48 @@ suite "shader body generation":
       }
       float doubled = keaTemp0;
       keaOut_pixel = doubled;
-    """.normalized in glsl.normalized
+    """
+
+    check expected.normalized in glsl.normalized
+
+  test "destructures tuple-valued blocks while preserving scope":
+    let glsl = fragGlsl(
+      positionOnlyVertex,
+
+      proc(value: Vec3): tuple[pixel: Vec3] =
+        let (sd, mean) = block:
+          var
+            mean = value
+            m2 = value * value
+
+          mean /= 9.0'f
+          m2 /= 9.0'f
+
+          let sd = sqrt(max(m2 - mean * mean, vec3(0.0'f)))
+
+          (sd: sd, mean: mean)
+
+        result.pixel = sd + mean
+    )
+
+    let expected = """
+      vec3 keaTemp0;
+      vec3 keaTemp1;
+      {
+        vec3 mean = value;
+        vec3 m2 = value * value;
+        mean /= 9.0;
+        m2 /= 9.0;
+        vec3 sd = sqrt(max(m2 - mean * mean, vec3(0.0)));
+        keaTemp0 = sd;
+        keaTemp1 = mean;
+      }
+      vec3 sd = keaTemp0;
+      vec3 mean = keaTemp1;
+      keaOut_pixel = sd + mean;
+    """  
+
+    check expected.normalized in glsl.normalized
 
   test "emits multiple let bindings with different types":
     let glsl = fragGlsl(
