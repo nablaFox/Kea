@@ -693,6 +693,55 @@ suite "shader body generation":
     check "float doubled = value * 2.0;" in glsl
     check "keaOut_pixel = doubled;" in glsl
 
+    test "lowers block assignments and preserves separate scopes":
+      let glsl = fragGlsl(
+        positionOnlyVertex,
+
+        proc(value: float32): tuple[first, second: float32] =
+          result.first = block:
+            let local = value * 2.0
+            local + 1.0
+
+          result.second = block:
+            let local = value * 3.0
+            local - 1.0
+      )
+
+      check """
+        {
+          float local = value * 2.0;
+          keaOut_first = local + 1.0;
+        }
+        {
+          float local = value * 3.0;
+          keaOut_second = local - 1.0;
+        }
+      """.normalized in glsl.normalized
+
+      check "keaTemp" notin glsl
+
+  test "lowers block initializers through a temporary":
+    let glsl = fragGlsl(
+      positionOnlyVertex,
+
+      proc(value: float32): tuple[pixel: float32] =
+        let doubled = block:
+          let local = value + 1.0
+          local * 2.0
+
+        result.pixel = doubled
+    )
+
+    check """
+      float keaTemp0;
+      {
+        float local = value + 1.0;
+        keaTemp0 = local * 2.0;
+      }
+      float doubled = keaTemp0;
+      keaOut_pixel = doubled;
+    """.normalized in glsl.normalized
+
   test "emits multiple let bindings with different types":
     let glsl = fragGlsl(
       positionOnlyVertex,
@@ -1192,4 +1241,33 @@ suite "shader validation":
         proc(value: InvalidUniform): tuple[pixel: Vec4] =
           discard
       )
+    )
+
+  test "rejects globals whose types mismatch shader uniforms":
+    type
+      MatchingGlobals = tuple[strength: float32]
+      MismatchedGlobals = tuple[strength: Vec3]
+
+    proc fragment(strength: float32): tuple[pixel: float32] =
+      result.pixel = strength
+
+    macro inferredMaterial(globals: typedesc): untyped =
+      materialType(
+        bindSym"positionOnlyVertex",
+        bindSym"fragment",
+        globals.getTypeInst[1]
+      )
+
+    check compiles(
+      block:
+        type Material = inferredMaterial(MatchingGlobals)
+        var material: Material
+        discard material
+    )
+
+    check not compiles(
+      block:
+        type Material = inferredMaterial(MismatchedGlobals)
+        var material: Material
+        discard material
     )

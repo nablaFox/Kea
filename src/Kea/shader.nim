@@ -362,23 +362,26 @@ proc intrinsicName(symbol: NimNode): string =
     (bindSym"hom", "vec4"),
     (bindSym"xyz", ".xyz"),
     (bindSym"xy", ".xy"),
+    (bindSym"texelFetch", "texelFetch"),
     (bindSym"sample", "texture"),
+    (bindSym"size", "textureSize"),
     (bindSym"normalize", "normalize"),
     (bindSym"dot", "dot"),
     (bindSym"pow", "pow"),
     (bindSym"clamp", "clamp"),
+    (bindSym"fwidth", "fwidth"),
     (bindSym"sqrt", "sqrt"),
     (bindSym"invsqrt", "inversesqrt"),
     (bindSym"vec", "vec"),
     (bindSym"vec3", "vec3"),
     (bindSym"mix", "mix"),
-    (bindSym"size", "textureSize"),
     (bindSym"abs", "abs"),
     (bindSym"max", "max"),
     (bindSym"min", "min"),
     (bindSym"cross", "cross"),
     (bindSym"transpose", "transpose"),
     (bindSym"floorMod", "mod"),
+    (bindSym"floor", "floor"),
   ]:
     if intrinsic.kind in {nnkOpenSymChoice, nnkClosedSymChoice}:
       for overload in intrinsic:
@@ -555,6 +558,15 @@ proc emitBody(
 
         result = "vec2(textureSize(" & node[1].emitExpr & ", 0))"
 
+      of "texelFetch":
+        if node.len != 4:
+          error "texelFetch expects texture, pixel, and lod", node
+
+        result = "texelFetch(" &
+          node[1].emitExpr & ", ivec2(" &
+          node[2].emitExpr & "), " &
+          node[3].emitExpr & ")"
+
       else:
         let args = node.toSeq[1..^1]
           .mapIt(it.emitExpr)
@@ -658,6 +670,9 @@ proc emitBody(
        nnkHiddenAddr, nnkHiddenDeref:
       result = node[^1].needsStatements
 
+    of nnkBlockExpr:
+      result = true
+
     else:
       result = false
 
@@ -686,7 +701,10 @@ proc emitBody(
 
       result.add "\n"
 
-    of nnkStmtListExpr:
+    of nnkStmtList, nnkStmtListExpr:
+      if value.len == 0:
+        error "expected a value-producing block", value
+
       result.add "{\n"
 
       for index in 0 ..< value.len - 1:
@@ -697,6 +715,12 @@ proc emitBody(
 
     of nnkHiddenStdConv, nnkHiddenSubConv,
        nnkHiddenAddr, nnkHiddenDeref:
+      result = emitInto(target, value[^1])
+
+    of nnkBlockExpr:
+      if value[0].kind != nnkEmpty:
+        error "named block expressions are not supported", value
+
       result = emitInto(target, value[^1])
 
     else:
@@ -1055,24 +1079,49 @@ func materialType*(
     fragSignature = frag.signature
     globalsType = globals.getTypeImpl
 
-  result = newNimNode(nnkTupleTy)
+  var params: seq[Parameter]
 
-  for param in vertSignature.parameters & fragSignature.parameters:
+  for param in vertSignature.parameters:
     if sameType(param.typ, bindSym"Vertex"):
       continue
 
     if param.name.strVal in ["model", "nmat"]:
       continue
 
-    if globalsType.containsField(param.name) or
-       vertSignature.returnType.containsField(param.name) or
-       result.containsField(param.name):
+    params.add(param)
+
+  for param in fragSignature.parameters:
+    if param.name.strVal != "pos" and
+      vertSignature.returnType.containsField(param.name):
       continue
 
-    result.add newIdentDefs(
-      param.name.strVal.ident,
-      param.typ.copyNimTree
-    )
+    if params.anyIt(it.name.strVal == param.name.strVal):
+      continue
+
+    params.add(param)
+
+  for field in globalsType.fields:
+    let index = params.findIt(it.name.strVal == field.name.strVal)
+
+    if index < 0:
+      error "unknown global uniform: " & field.name.strVal, field.name
+
+    if not sameType(field.typ, params[index].typ):
+      error(
+        "global '" & field.name.strVal & "' has type " &
+        field.typ.repr & ", but shader expects " &
+        params[index].typ.repr,
+        field.name
+      )
+
+  result = newNimNode(nnkTupleTy)
+
+  for param in params:
+    if not globalsType.containsField(param.name):
+      result.add newIdentDefs(
+        param.name.strVal.ident,
+        param.typ.copyNimTree
+      )
 
 func attachmentsType*(frag: NimNode): NimNode =
   frag.signature.returnType.copyNimTree

@@ -425,6 +425,13 @@ proc sample*(
 ): array[4, float32] =
   discard
 
+proc texelFetch*[F](
+  texture: Texture[F],
+  pixel: array[2, float32],
+  lod: int = 0
+): array[4, float32] =
+  discard
+
 proc residentSampleHandle*[F: static TextureFormat](
   texture: Texture[F]
 ): GLuint64 =
