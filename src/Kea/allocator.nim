@@ -1,4 +1,4 @@
-import core, math
+import core, math/vector
 
 const
   DefaultVertexCapacity {.intdefine: "kea.vertexCapacity".} = 1_000_000

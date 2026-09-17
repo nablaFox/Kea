@@ -197,7 +197,7 @@ proc render*[
     let
       renderable = item.renderable
       model = renderable.transform.model
-      nmat = model.normalMatrix
+      nmat = model.inverse.transpose.upper(3)
 
     renderer.modelUniform.set(model)
     renderer.nmatUniform.set(nmat)

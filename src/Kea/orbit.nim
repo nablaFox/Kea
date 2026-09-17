@@ -1,4 +1,4 @@
-import math, input, camera, frame
+import math, transform, input, camera, frame
 
 type OrbitController* = object
   camera*: Camera

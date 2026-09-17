@@ -16,6 +16,39 @@ const Identity* = Transform(
   dirty: false
 )
 
+proc pitch*(value: float32): Mat3 =
+  let
+    cp = cos(value)
+    sp = sin(value)
+
+  [
+    [1.0, 0.0, 0.0],
+    [0.0, cp, -sp],
+    [0.0, sp, cp],
+  ]
+
+proc yaw*(value: float32): Mat3 =
+  let
+    cy = cos(value)
+    sy = sin(value)
+
+  [
+    [cy, 0.0, sy],
+    [0.0, 1.0, 0.0],
+    [-sy, 0.0, cy],
+  ]
+
+proc roll*(value: float32): Mat3 =
+  let
+    cr = cos(value)
+    sr = sin(value)
+
+  [
+    [cr, -sr, 0.0],
+    [sr, cr, 0.0],
+    [0.0, 0.0, 1.0],
+  ]
+
 proc new*(
   position: Vec3,
   rotation: Mat3 = Identity3,
@@ -83,7 +116,7 @@ proc transMatrix*(position: Vec3): Mat4 =
     [0.0, 0.0, 1.0, position.z],
     [0.0, 0.0, 0.0, 1.0]
   ]
-  
+
 proc scaleMatrix(scale: Vec3): Mat4 =
   [
     [scale.x, 0.0, 0.0, 0.0],

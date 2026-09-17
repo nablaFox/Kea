@@ -1,4 +1,4 @@
-import nimgl/opengl, allocator, math
+import nimgl/opengl, math/vector, allocator
 
 type
   Topology* = enum
