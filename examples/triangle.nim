@@ -1,7 +1,3 @@
-# This demosnstrates the creation of a custom renderer for wich we can specify
-# custom shaders expecting custom material properties wich can be updated
-# dynamically at runtime.
-
 import Kea
 
 let

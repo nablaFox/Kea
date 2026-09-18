@@ -349,6 +349,68 @@ proc texture*(
 
   result.update(data)
 
+macro target*(
+  res: Resources,
+  key: string,
+  width, height: Positive,
+  depth: static bool,
+  attachments: untyped
+): untyped =
+  attachments.expectKind(nnkTupleConstr)
+
+  let
+    resourceStore = genSym(nskLet, "resourceStore")
+    targetWidth = genSym(nskLet, "targetWidth")
+    targetHeight = genSym(nskLet, "targetHeight")
+
+  var colors = newNimNode(nnkTupleConstr)
+
+  for attachment in attachments:
+    attachment.expectKind(nnkExprColonExpr)
+
+    let descriptor = attachment[1]
+
+    let texture = quote do:
+      textureModule.new(
+        `resourceStore`.kea,
+        `targetWidth`,
+        `targetHeight`,
+        `descriptor`.format,
+        DataTextureOptions
+      )
+
+    colors.add newColonExpr(attachment[0], texture)
+
+  var create = quote do:
+    targetModule.new(`resourceStore`.kea, `colors`)
+
+  if depth:
+    create.add quote do:
+      textureModule.new(
+        `resourceStore`.kea,
+        `targetWidth`,
+        `targetHeight`,
+        Depth24,
+        DataTextureOptions
+      )
+
+  result = quote do:
+    block:
+      let
+        `resourceStore` = `res`
+        `targetWidth` = `width`
+        `targetHeight` = `height`
+        cacheKey = `key`
+
+      var target = cached(`resourceStore`.targets, `key`, `create`)
+
+      if target.width != `targetWidth` or target.height != `targetHeight`:
+        target = `create`
+        `resourceStore`.targets[cacheKey] =
+          CacheEntry[typeof(target)](value: target)
+
+      target
+
 macro renderer*(
   res: Resources,
   vert, frag: typed,

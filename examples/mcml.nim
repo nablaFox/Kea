@@ -1,7 +1,7 @@
 import Kea, std/[random, sequtils]
 
 type
-  Mcml = object
+  Mcml* = object
     resolution: Positive
     absorption: float32
     scattering: float32
@@ -12,7 +12,7 @@ type
     transmittance: seq[float32]
     diffuse: seq[float32]
 
-proc new(
+proc new*(
   resolution: Natural,
   depth: float32,
   size: float32,
@@ -31,7 +31,7 @@ proc new(
     diffuse: newSeq[float32](resolution * resolution)
   )
 
-proc update(mcml: var Mcml, photons: Natural) =
+proc update*(mcml: var Mcml, photons: Natural) =
   let
     N = mcml.resolution
     depth = mcml.depth
@@ -99,7 +99,7 @@ proc update(mcml: var Mcml, photons: Natural) =
 
   mcml.photons += photons.uint32
 
-proc render(
+proc render*(
   mcml: Mcml,
   res: Resources,
   target: RenderTarget,
@@ -222,18 +222,24 @@ proc render(
     )
   )
 
-let
-  kea = init(
-    title = "mcml",
-    width = 800,
-    height = 600,
-    cursor = Disabled
-  )
+when isMainModule:
+  let
+    kea = init(
+      title = "mcml",
+      width = 800,
+      height = 600,
+      cursor = Disabled
+    )
 
-  res = resources.new(kea)
+    res = resources.new(kea)
 
-var
-  mcml = new(
+    orbit = orbit.new(
+      camera.new(Perspective),
+      target = [0.0'f, 1.0, 0.0],
+      distance = 1.0
+    )
+
+  var mcml = new(
     resolution = 512,
     depth = 0.03'f,
     absorption = 2'f,
@@ -242,30 +248,24 @@ var
     size = 0.5'f
   )
 
-  orbit = orbit.new(
-    camera.new(Perspective),
-    target = [0.0'f, 1.0, 0.0],
-    distance = 1.0
-  )
+  random.randomize()
 
-random.randomize()
+  for frame in kea.frames:
+    if frame.keyboard.pressed(Escape):
+      break
 
-for frame in kea.frames:
-  if frame.keyboard.pressed(Escape):
-    break
+    orbit.update(frame)
 
-  orbit.update(frame)
+    mcml.update(photons = 20_000)
 
-  mcml.update(photons = 20_000)
+    frame.backbuffer.clear(color = White * 0.1)
 
-  frame.backbuffer.clear(color = White * 0.1)
+    mcml.render(
+      res,
+      frame.backbuffer,
+      orbit.camera,
+      yaw = -(PI / 2.0),
+      y = 1.0
+    )
 
-  mcml.render(
-    res,
-    frame.backbuffer,
-    orbit.camera,
-    yaw = -(PI / 2.0),
-    y = 1.0
-  )
-
-  frame.present()
+    frame.present()

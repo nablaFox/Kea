@@ -1,44 +1,70 @@
 import
-  core,
-  renderer,
-  mesh,
-  math,
-  shader,
-  ltc,
-  texture,
-  tonemap,
-  camera,
-  target,
-  transform,
-  item,
-  colors,
-  light,
-  resources,
-  std/[tables, sugar]
+  Kea/[
+    core,
+    renderer,
+    mesh,
+    math,
+    shader,
+    ltc,
+    texture,
+    tonemap,
+    camera,
+    target,
+    transform,
+    item,
+    colors,
+    light,
+    resources
+  ]
 
 type
-  PBRMaterial = tuple[
-    prevModel: Mat4,
+  PBRMaterial* = tuple[
+    prevModel: Mat4 = Identity4,
     albedo: Vec3 = [1.0, 1.0, 1.0],
     roughness: float32 = 0.5,
     metallic: float32 = 0.0
   ]
 
-  PBRItem* = ref object
-    mesh*: Mesh
-    topology*: Topology
-    transform*: Transform
+  GBufferGlobals* = tuple[
+    view: Mat4,
+    proj: Mat4,
+    jitter: Vec2,
+    prevViewProjJitter: Mat4,
+    eye: Vec3,
+    light: RectLight,
+    ltcInverseMatrixLut: Texture[Rgba32Float],
+    ltcMagnitudeFresnelLut: Texture[Rg32Float]
+  ]
 
-    albedo*: Vec3 = [1.0, 1.0, 1.0]
-    roughness*: float32 = 0.5
-    metallic*: float32 = 0.0
+  GBufferTarget* = ColorDepthTarget[tuple[
+    analytic: Texture[Rgb32Float],
+    position: Texture[Rgb32Float],
+    motion: Texture[Rg32Float],
+    normalRoughness: Texture[Rgba32Float],
+    albedoMetallic: Texture[Rgba32Float]
+  ]]
 
-    prevModel: Mat4
+  GBufferRenderer*[M] =
+    Renderer[GBufferGlobals, M, tuple[
+      analytic: Vec3,
+      position: Vec3,
+      motion: Vec2,
+      normalRoughness: Vec4,
+      albedoMetallic: Vec4
+    ]]
+
+  PBRDraw* = proc(
+    gbuffer: GBufferTarget,
+    globals: GBufferGlobals
+  ) {.closure}
+
+  PBRSource* = concept source
+    draws(source, Resources) is seq[PBRDraw]
 
   PBR* = ref object
     res: Resources
 
-    items: OrderedTable[string, PBRItem]
+    pending*: seq[PBRDraw]
 
     frame: uint64
     prevViewProjJitter: Mat4
@@ -46,19 +72,6 @@ type
 
     ltcMagnitudeFresnelLut: Texture[Rg32Float]
     ltcInverseMatrixLut: Texture[Rgba32Float]
-
-const
-  Red* = (
-    albedo: [1.0, 0.0, 0.0],
-    roughness: 0.5,
-    metallic: 0.0
-  )
-
-  White* = (
-    albedo: [1.0, 1.0, 1.0],
-    roughness: 0.5,
-    metallic: 0.0
-  )
 
 proc new*(res: Resources): PBR =
   let
@@ -86,6 +99,9 @@ proc new*(res: Resources): PBR =
     ltcMagnitudeFresnelLut: ltcMagnitudeFresnelLut
   )
 
+proc res*(pbr: PBR): Resources =
+  pbr.res
+
 proc render*(
   pbr: PBR,
   target: RenderTarget,
@@ -100,27 +116,11 @@ proc render*(
   let
     aspect = target.aspect
 
-    items = collect:
-      for source in pbr.items.values:
-        RenderItem[PBRMaterial](
-          renderable: Renderable(
-            mesh: source.mesh,
-            topology: source.topology,
-            transform: source.transform
-          ),
-          material: (
-            prevModel: source.prevModel,
-            albedo: source.albedo,
-            roughness: source.roughness,
-            metallic: source.metallic
-          )
-        )
-
     view = camera.view
 
     proj = camera.proj aspect
 
-    jitterUv: Vec2 = block:
+    jitter: Vec2 = block:
       proc halton(i, base: int): float32 =
         var
           f = 1.0'f
@@ -141,118 +141,37 @@ proc render*(
         (halton(i, 3) - 0.5'f) / height.float32
       ]
 
-    jitter = [2'f * jitterUv.x, 2'f * jitterUv.y, 0'f].transMatrix
+    gbuffer = pbr.res.target(
+      key = "pbr/gbuffer",
+      width = width,
+      height = height,
+      depth = true,
+      attachments = (
+        analytic: (format: Rgb32Float),
+        position: (format: Rgb32Float),
+        motion: (format: Rg32Float),
+        normalRoughness: (format: Rgba32Float),
+        albedoMetallic: (format: Rgba32Float)
+      )
+    )
 
   if pbr.frame == 0:
     pbr.prevViewProjJitter = proj * view
 
-  let gbuffer = block:
-    proc vert(
-      vert: Vertex,
-      model, prevModel: Mat4,
-      nmat: Mat3,
-      view, proj, prevViewProjJitter, jitter: Mat4
-    ): tuple[
-      pos: Vec4,
-      worldNormal: Vec3,
-      worldPosition: Vec3,
-      currClip: Vec4,
-      prevClip: Vec4
-    ] =
-      let
-        P = model * vert.position.hom
+  gbuffer.clear()
 
-        currClip =
-          proj *
-          view *
-          P
-
-        prevClip =
-          prevViewProjJitter *
-          prevModel *
-          vert.position.hom
-
-      result.pos = jitter * currClip
-      result.worldPosition = P.xyz
-      result.worldNormal = nmat * vert.normal
-      result.currClip = currClip
-      result.prevClip = prevClip
-
-    proc frag(
-      worldNormal: Vec3,
-      worldPosition: Vec3,
-      albedo: Vec3,
-      roughness: float32,
-      metallic: float32,
-      eye: Vec3,
-      light: RectLight,
-      ltcInverseMatrixLut: Texture[Rgba32Float],
-      ltcMagnitudeFresnelLut: Texture[Rg32Float],
-      currClip, prevClip: Vec4
-    ): tuple[
-      analytic: Vec3,
-      position: Vec3,
-      motion: Vec2,
-      normalRoughness: Vec4,
-      albedoMetallic: Vec4,
-      depth: float32
-    ] =
-      let
-        P = worldPosition
-        V = (eye - P).normalize
-        N = worldNormal.normalize.face(V)
-
-      result.position = worldPosition
-
-      result.albedoMetallic = [albedo.x, albedo.y, albedo.z, metallic]
-
-      result.normalRoughness = [N.x, N.y, N.z, roughness]
-
-      result.depth = currClip.w
-
-      result.motion = block:
-        let
-          currUv = (currClip.xy / currClip.w) * 0.5'f + 0.5'f
-          prevUv = (prevClip.xy / prevClip.w) * 0.5'f + 0.5'f
-
-        currUv - prevUv
-
-      result.analytic = block:
-        let
-          size = ltcInverseMatrixLut.size
-          x = roughness
-          y = 1 - clamp(dot(N, V), 0, 1).sqrt
-          uv = ([x, y] * (size - 1.0'f) + 0.5'f) / size
-
-          shape = ltcInverseMatrixLut.sample(uv)
-          terms = ltcMagnitudeFresnelLut.sample(uv).xy
-
-        light.radiance(
-          P, N, V,
-          albedo,
-          metallic,
-          ltcShape = shape,
-          ltcAmplitude = terms.x,
-          ltcFresnelWeight = terms.y
-        )
-
-    pbr.res.render(
-      renderer = "pbr/geometry-pass",
-      target = "pbr/gbuffer",
-      width = width,
-      height = height,
-      vert = vert,
-      frag = frag,
-      items = items,
-      globals = (
+  for draw in pbr.pending:
+    draw(
+      gbuffer,
+      (
         view: view,
         proj: proj,
         jitter: jitter,
+        prevViewProjJitter: pbr.prevViewProjJitter,
         eye: camera.positioned,
         light: light,
         ltcInverseMatrixLut: pbr.ltcInverseMatrixLut,
-        ltcMagnitudeFresnelLut: pbr.ltcMagnitudeFresnelLut,
-        prevViewProjJitter: pbr.prevViewProjJitter
+        ltcMagnitudeFresnelLut: pbr.ltcMagnitudeFresnelLut
       )
     )
 
@@ -332,14 +251,14 @@ proc render*(
     proc frag(
       uv: Vec2,
       motion: Texture[Rg32Float],
-      jitterUv: Vec2,
+      jitter: Vec2,
       currentColor: Texture[Rgb32Float],
-      currentDepth: Texture[R32Float],
+      currentDepth: Texture[Depth24],
       historyValid: bool,
       history: Texture[Rgb32Float]
     ): tuple[pixel: Vec3] =
-      let 
-        currentUv = uv + jitterUv
+      let
+        currentUv = uv + jitter
         current = currentColor.sample(currentUv).xyz
 
       if not historyValid:
@@ -352,14 +271,14 @@ proc render*(
           size = currentDepth.size
           center = (currentUv * size).floor
 
-        var 
+        var
           z = 1e30'f
           p = center
 
         # TODO: add support for iterators
         for x in -1 .. 1:
           for y in -1 .. 1:
-            let 
+            let
               q = clamp(
                 center + [x.float32, y.float32],
                 [0.0'f, 0.0],
@@ -379,7 +298,7 @@ proc render*(
       if historyUv.x < 0 or historyUv.x > 1 or
           historyUv.y < 0 or historyUv.y > 1:
         result.pixel = current
-        return 
+        return
 
       # sd and mean in YCoCg space over 3x3 neighb.
       let (sd, mean) = block:
@@ -407,7 +326,7 @@ proc render*(
                 .rgbToYCoCg
 
             mean += color
-            m2 += color * color 
+            m2 += color * color
 
         mean /= 9'f
         m2 /= 9'f
@@ -468,9 +387,9 @@ proc render*(
       colorOptions = (pixel: LinearTextureOptions),
       globals = (
         motion: gbuffer.atts.motion,
-        jitterUv: jitterUv,
+        jitter: jitter,
         currentColor: lit.atts.pixel,
-        currentDepth: gbuffer.atts.depth,
+        currentDepth: gbuffer.depth,
         historyValid: historyValid,
         history:
           if historyValid: pbr.history
@@ -499,95 +418,11 @@ proc render*(
       )
     )
 
-  for item in pbr.items.values:
-    item.prevModel = item.transform.model
+  # for item in pbr.items.values:
+  #   item.prevModel = item.transform.model
+
+  pbr.pending.setLen(0)
 
   pbr.prevViewProjJitter = proj * view
   pbr.history = taa.atts.pixel
   pbr.frame += 1
-
-proc add*(
-  pbr: PBR,
-  key: string,
-  mesh: Mesh,
-  transform: Transform,
-  topology: Topology = Triangles,
-  albedo: Vec3 = [1.0, 1.0, 1.0],
-  roughness: float32 = 0.5,
-  metallic: float32 = 0.0
-): PBRItem =
-  result = PBRItem(
-    mesh: mesh,
-    topology: topology,
-    transform: transform,
-    albedo: albedo,
-    roughness: roughness,
-    metallic: metallic,
-    prevModel: transform.model
-  )
-
-  pbr.items[key] = result
-
-proc add*(
-  pbr: PBR,
-  key: string,
-  mesh: Mesh,
-  albedo: Vec3 = [1.0, 1.0, 1.0],
-  roughness: float32 = 0.5,
-  metallic: float32 = 0.0,
-  x: float32 = 0.0,
-  y: float32 = 0.0,
-  z: float32 = 0.0,
-  yaw: float32 = 0.0,
-  pitch: float32 = 0.0,
-  roll: float32 = 0.0,
-  scale: Vec3 = vec3(1.0),
-  topology: Topology = Triangles
-): PBRItem =
-  pbr.add(
-    key,
-    mesh,
-    transform.new(
-      x = x,
-      y = y,
-      z = z,
-      yaw = yaw,
-      pitch = pitch,
-      roll = roll,
-      scale = scale,
-    ),
-    topology = topology,
-    albedo = albedo,
-    roughness = roughness,
-    metallic = metallic
-  )
-
-proc remove*(
-  pbr: PBR,
-  key: string
-) =
-  pbr.items.del(key)
-
-proc transform*(item: PBRItem): var Transform =
-  item.transform
-
-proc position*(item: PBRItem): var Vec3 =
-  item.transform.position
-
-proc scale*(item: PBRItem): var Vec3 =
-  item.transform.scale
-
-proc rotation*(item: PBRItem): var Mat3 =
-  item.transform.rotation
-
-proc positioned*(item: PBRItem): Vec3 =
-  let transform = item.transform
-  transform.position
-
-proc scaled*(item: PBRItem): Vec3 =
-  let transform = item.transform
-  transform.scale
-
-proc rotated*(item: PBRItem): Mat3 =
-  let transform = item.transform
-  transform.rotation

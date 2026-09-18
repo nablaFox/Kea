@@ -2,7 +2,6 @@ import
   Kea/[
     core,
     frame,
-    pbr,
     renderer,
     math,
     target,
@@ -19,6 +18,12 @@ import
     light,
     resources,
     shader
+  ],
+  Kea/pbr/[
+    pbr,
+    materials,
+    pbr,
+    submit
   ]
 
 export
@@ -40,4 +45,8 @@ export
   allocator,
   resources,
   light,
-  shader
+  shader,
+  pbr,
+  materials,
+  pbr,
+  submit

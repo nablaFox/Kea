@@ -1,6 +1,6 @@
 import math, transform, input, camera, frame
 
-type OrbitController* = object
+type OrbitController* = ref object
   camera*: Camera
   target*: Vec3
   home*: Vec3
@@ -29,7 +29,7 @@ proc new*(
   )
 
 proc update*(
-  orbit: var OrbitController,
+  orbit: OrbitController,
   delta: float32,
   mouse: Mouse,
   keyboard: Keyboard,
@@ -74,7 +74,7 @@ proc update*(
 
   orbit.camera.rotation = rotation
 
-proc update*(orbit: var OrbitController, frame: Frame) =
+proc update*(orbit: OrbitController, frame: Frame) =
   orbit.update(
     delta = frame.delta,
     mouse = frame.mouse,
