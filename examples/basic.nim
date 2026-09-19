@@ -32,11 +32,17 @@ for frame in kea.frames:
     y = -1.0,
     scale = [10'f, 10, 10],
     pitch = -PI / 2.0,
-    material = (
-      prevModel: Identity4,
-      albedo: [0.32'f, 0.38, 0.43],
-      roughness: 0.15'f,
-      metallic: 0.0'f
+    renderer = res.hooks(
+      albedo = proc(frag: Frag): Color =
+        let
+          x = floor(frag.uv.x * 8.0'f)
+          y = floor(frag.uv.y * 8.0'f)
+          checker = floorMod(x + y, 2.0'f)
+
+        mix(Black, White, checker),
+
+      roughness = proc(frag: Frag): float32 =
+        0.15
     )
   )
 

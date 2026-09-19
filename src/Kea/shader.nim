@@ -628,6 +628,29 @@ proc emitBody(
 
       result = node[0].emitExpr(7) & "[" & node[1].emitExpr & "]"
 
+    of nnkObjConstr:
+      let
+        typ = node.getTypeInst
+        impl = typ.getTypeImpl
+        initializers = node.toSeq[1 .. ^1]
+
+      impl.expectKind(nnkObjectTy)
+
+      var args: seq[string]
+
+      for field in impl[^1].fields:
+        let index = initializers.findIt(
+          it[0].strVal == field.name.strVal
+        )
+
+        if index < 0:
+          error "shader constructor requires field: " &
+            field.name.strVal, node
+
+        args.add initializers[index][1].emitExpr
+
+      result = typ.glslType & "(" & args.join(", ") & ")"
+
     of nnkBracket:
       result = node.getTypeInst.glslType & "(" &
         node.toSeq.mapIt(it.emitExpr).join(", ") & ")"

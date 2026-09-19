@@ -21,9 +21,9 @@ import
   ],
   Kea/pbr/[
     pbr,
-    materials,
+    material,
     pbr,
-    hooks,
+    gbuffer,
     submit
   ]
 
@@ -48,7 +48,7 @@ export
   light,
   shader,
   pbr,
-  materials,
+  material,
   pbr,
   submit,
-  hooks
+  gbuffer
