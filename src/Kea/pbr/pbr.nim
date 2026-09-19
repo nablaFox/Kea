@@ -418,9 +418,6 @@ proc render*(
       )
     )
 
-  # for item in pbr.items.values:
-  #   item.prevModel = item.transform.model
-
   pbr.pending.setLen(0)
 
   pbr.prevViewProjJitter = proj * view

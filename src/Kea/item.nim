@@ -1,11 +1,6 @@
-import mesh, transform, math
+import mesh, transform, math, renderable
 
 type
-  Renderable* = ref object
-    mesh*: Mesh
-    topology*: Topology
-    transform*: Transform
-
   RenderItem*[M: tuple] = ref object
     renderable*: Renderable
     material*: M
@@ -51,33 +46,6 @@ proc new*[M](
     material,
     topology,
   )
-
-proc transform*(renderable: Renderable): var Transform =
-  renderable.transform
-
-proc position*(renderable: Renderable): var Vec3 =
-  renderable.transform.position
-
-proc positioned*(renderable: Renderable): Vec3 =
-  let transform = renderable.transform
-  transform.position
-
-proc scale*(renderable: Renderable): var Vec3 =
-  renderable.transform.scale
-
-proc scaled*(renderable: Renderable): Vec3 =
-  let transform = renderable.transform
-  transform.scale
-
-proc rotation*(renderable: Renderable): var Mat3 =
-  renderable.transform.rotation
-
-proc rotated*(renderable: Renderable): Mat3 =
-  let transform = renderable.transform
-  transform.rotation
-
-proc model*(renderable: Renderable): Mat4 =
-  renderable.transform.model
 
 proc transform*(item: RenderItem): var Transform =
   item.renderable.transform

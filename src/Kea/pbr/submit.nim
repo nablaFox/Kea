@@ -14,7 +14,7 @@ import
 proc draw*[M](
   res: Resources,
   items: openArray[RenderItem[M]],
-  hooks: GBufferRenderer[M] = nil,
+  hooks: GBufferRenderer[M] = nil
 ): PBRDraw =
   let ownedItems = @items
 
@@ -36,9 +36,9 @@ proc draw*[M](
   res: Resources,
   mesh: Mesh,
   transform: Transform,
-  hooks: GBufferRenderer[M] = nil,
-  material: M = M.default,
-  topology: Topology = Triangles
+  material: M,
+  topology: Topology = Triangles,
+  hooks: GBufferRenderer[M] = nil
 ): PBRDraw =
   draw(
     res,
@@ -63,9 +63,9 @@ proc draw*[M](
   pitch: float32 = 0.0,
   roll: float32 = 0.0,
   scale: Vec3 = vec3(1.0),
-  hooks: GBufferRenderer[M] = nil,
-  material: M = M.default,
-  topology: Topology = Triangles
+  material: M,
+  topology: Topology = Triangles,
+  hooks: GBufferRenderer[M] = nil
 ): PBRDraw =
   draw(
     res,
@@ -77,12 +77,71 @@ proc draw*[M](
       yaw = yaw,
       pitch = pitch,
       roll = roll,
-      scale = scale,
+      scale = scale
     ),
-    hooks = hooks,
     material = material,
-    topology = topology
+    topology = topology,
+    hooks = hooks
   )
+
+proc draw*(
+  res: Resources,
+  renderable: Renderable,
+  material: PBRMaterial = PBRMaterial.default,
+  topology: Topology = Triangles,
+  hooks: GBufferRenderer[PBRMaterial] = nil
+): PBRDraw =
+  draw[PBRMaterial](
+    res,
+    renderable.mesh,
+    renderable.transform,
+    material = material,
+    topology = topology,
+    hooks = hooks
+  )
+
+proc draw*(
+  res: Resources,
+  mesh: Mesh,
+  transform: Transform,
+  material: PBRMaterial = PBRMaterial.default,
+  topology: Topology = Triangles,
+  hooks: GBufferRenderer[PBRMaterial] = nil
+): PBRDraw =
+  draw[PBRMaterial](
+    res,
+    mesh,
+    transform,
+    material = material,
+    topology = topology,
+    hooks = hooks
+  )
+
+proc draw*(
+  res: Resources,
+  mesh: Mesh,
+  x: float32 = 0.0,
+  y: float32 = 0.0,
+  z: float32 = 0.0,
+  yaw: float32 = 0.0,
+  pitch: float32 = 0.0,
+  roll: float32 = 0.0,
+  scale: Vec3 = vec3(1.0),
+  material: PBRMaterial = PBRMaterial.default,
+  topology: Topology = Triangles,
+  hooks: GBufferRenderer[PBRMaterial] = nil
+): PBRDraw =
+  draw[PBRMaterial](
+    res,
+    mesh,
+    x, y, z,
+    yaw, pitch, roll,
+    scale,
+    material = material,
+    topology = topology,
+    hooks = hooks
+  )
+
 
 proc submit*(pbr: PBR, draws: openArray[PBRDraw]) =
   pbr.pending.add draws
@@ -95,22 +154,40 @@ proc submit*(pbr: PBR, source: PBRSource) =
 
 proc submit*[M](
   pbr: PBR,
-  mesh: Mesh,
-  transform: Transform,
-  hooks: GBufferRenderer[M] = nil,
-  material: M = M.default,
-  topology: Topology = Triangles
+  items: openArray[RenderItem[M]],
+  hooks: GBufferRenderer[M] = nil
 ) =
   pbr.submit draw(
     pbr.res,
-    items = @[
-      item.new(
-        mesh,
-        transform,
-        material,
-        topology
-      )
-    ],
+    items = items,
+    hooks = hooks
+  )
+
+proc submit*[M](
+  pbr: PBR,
+  item: RenderItem[M],
+  hooks: GBufferRenderer[M] = nil
+) =
+  pbr.submit(
+    items = @[item],
+    hooks = hooks
+  )
+
+proc submit*[M](
+  pbr: PBR,
+  mesh: Mesh,
+  transform: Transform,
+  material: M,
+  topology: Topology = Triangles,
+  hooks: GBufferRenderer[M] = nil
+) =
+  pbr.submit(
+    item = item.new(
+      mesh,
+      transform,
+      material,
+      topology
+    ),
     hooks = hooks
   )
 
@@ -125,11 +202,10 @@ proc submit*[M](
   roll: float32 = 0.0,
   scale: Vec3 = vec3(1.0),
   material: M,
-  hooks: GBufferRenderer[M] = nil,
-  topology: Topology = Triangles
+  topology: Topology = Triangles,
+  hooks: GBufferRenderer[M] = nil
 ) =
-  pbr.submit draw(
-    pbr.res,
+  pbr.submit(
     mesh,
     transform.new(
       x = x,
@@ -138,11 +214,44 @@ proc submit*[M](
       yaw = yaw,
       pitch = pitch,
       roll = roll,
-      scale = scale,
+      scale = scale
     ),
-    hooks = hooks,
     material = material,
-    topology = topology
+    topology = topology,
+    hooks = hooks
+  )
+
+proc submit*(
+  pbr: PBR,
+  renderable: Renderable,
+  material: PBRMaterial = PBRMaterial.default,
+  topology: Topology = Triangles,
+  hooks: GBufferRenderer[PBRMaterial] = nil
+) =
+  submit[PBRMaterial](
+    pbr,
+    renderable.mesh,
+    renderable.transform,
+    material = material,
+    topology = topology,
+    hooks = hooks
+  )
+
+proc submit*(
+  pbr: PBR,
+  mesh: Mesh,
+  transform: Transform,
+  material: PBRMaterial = PBRMaterial.default,
+  topology: Topology = Triangles,
+  hooks: GBufferRenderer[PBRMaterial] = nil
+) =
+  submit[PBRMaterial](
+    pbr,
+    mesh,
+    transform,
+    material = material,
+    topology = topology,
+    hooks = hooks
   )
 
 proc submit*(
@@ -155,9 +264,9 @@ proc submit*(
   pitch: float32 = 0.0,
   roll: float32 = 0.0,
   scale: Vec3 = vec3(1.0),
-  hooks: GBufferRenderer[PBRMaterial] = nil,
   material: PBRMaterial = PBRMaterial.default,
-  topology: Topology = Triangles
+  topology: Topology = Triangles,
+  hooks: GBufferRenderer[PBRMaterial] = nil
 ) =
   submit[PBRMaterial](
     pbr,
@@ -165,7 +274,18 @@ proc submit*(
     x, y, z,
     yaw, pitch, roll,
     scale,
-    material,
-    hooks,
-    topology
+    material = material,
+    topology = topology,
+    hooks = hooks
+  )
+
+proc submit*(
+  pbr: PBR,
+  item: RenderItem[PBRMaterial],
+  hooks: GBufferRenderer[PBRMaterial] = nil
+) =
+  submit[PBRMaterial](
+    pbr,
+    item,
+    hooks = hooks
   )

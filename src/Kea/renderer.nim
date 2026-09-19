@@ -8,9 +8,10 @@ import
   texture,
   core,
   item,
+  renderable,
   std/[typetraits, macros]
 
-export item
+export item, renderable
 
 type
   RendererObj[

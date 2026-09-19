@@ -23,6 +23,7 @@ import
     pbr,
     materials,
     pbr,
+    hooks,
     submit
   ]
 
@@ -49,4 +50,5 @@ export
   pbr,
   materials,
   pbr,
-  submit
+  submit,
+  hooks
