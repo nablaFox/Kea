@@ -2,19 +2,12 @@ import math
 
 type
   Transform* = object
-    position: Vec3
-    rotation: Mat3
-    scale: Vec3
-    cachedMatrix: Mat4
-    dirty: bool
-
-const Identity* = Transform(
-  cachedMatrix: Identity4,
-  position: 0.vec3,
-  rotation: Identity3,
-  scale: 1.vec3,
-  dirty: false
-)
+    position: Vec3 = 0.vec3
+    rotation: Mat3 = Identity3
+    scale: Vec3 = 1.vec3
+    local: Mat4 = Identity4
+    cachedMatrix: Mat4 = Identity4
+    dirty: bool = false
 
 proc pitch*(value: float32): Mat3 =
   let
@@ -53,11 +46,13 @@ proc new*(
   position: Vec3 = 0.vec3,
   rotation: Mat3 = Identity3,
   scale: Vec3 = 1.vec3,
+  local: Mat4 = Identity4
 ): Transform =
   Transform(
     position: position,
     rotation: rotation,
     scale: scale,
+    local: Identity4,
     cachedMatrix: Identity4,
     dirty: true,
   )
@@ -71,6 +66,7 @@ proc new*(
   pitch: float32 = 0.0,
   roll: float32 = 0.0,
   scale: Vec3 = 1.vec3,
+  local: Mat4 = Identity4
 ): Transform =
   Transform(
     position: [x, y, z],
@@ -100,6 +96,13 @@ proc rotation*(transform: var Transform): var Mat3 =
 
 proc rotation*(transform: Transform): Mat3 =
   transform.rotation
+
+proc local*(transform: var Transform): var Mat4 =
+  transform.dirty = true
+  transform.local
+
+proc local*(transform: Transform): Mat4 =
+  transform.local
 
 proc rotMatrix(rot: Mat3): Mat4 =
   [
@@ -142,7 +145,7 @@ proc model*(transform: Transform): Mat4 =
 
     rot = transform.rotMatrix
 
-  trans * rot * scale
+  trans * rot * scale * transform.local
 
 proc model*(transform: var Transform): Mat4 =
   if not transform.dirty:
@@ -155,7 +158,9 @@ proc model*(transform: var Transform): Mat4 =
 
     rot = transform.rotMatrix
 
-  transform.cachedMatrix = trans * rot * scale
+  transform.cachedMatrix =
+    trans * rot * scale * transform.local
+
   transform.dirty = false
 
   transform.cachedMatrix

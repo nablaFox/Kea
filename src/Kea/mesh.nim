@@ -39,16 +39,16 @@ proc new*(
 
 proc update*(
   mesh: Mesh,
-  positions: openArray[Vec3],
-  normals: openArray[Vec3],
+  positions: openArray[Vec3] = [],
+  normals: openArray[Vec3] = [],
   colors: openArray[Vec3] = [],
   uvs: openArray[Vec2] = [],
   indices: openArray[uint32] = []
 ) =
-  doAssert positions.len == mesh.vertexCount,
+  doAssert positions.len == 0 or positions.len == mesh.vertexCount,
     "Position count must match the mesh vertex count"
 
-  doAssert normals.len == mesh.vertexCount,
+  doAssert normals.len == 0 or normals.len == mesh.vertexCount,
     "Normal count must match the mesh vertex count"
 
   doAssert colors.len == 0 or colors.len == mesh.vertexCount,

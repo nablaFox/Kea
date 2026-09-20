@@ -50,7 +50,8 @@ type
 
   PBRDraw* = proc(
     gbuffer: GBufferTarget,
-    globals: GBufferGlobals
+    globals: GBufferGlobals,
+    parentModel: Mat4
   ) {.closure}
 
   PBRSource* = concept source
@@ -97,7 +98,8 @@ proc render*(
   pbr: PBR,
   target: RenderTarget,
   camera: Camera,
-  light: RectLight
+  light: RectLight,
+  transform: Transform = Transform.default
 ) =
   let (targetWidth, targetHeight) = target.size
 
@@ -139,7 +141,8 @@ proc render*(
         light: light,
         ltcInverseMatrixLut: pbr.ltcInverseMatrixLut,
         ltcMagnitudeFresnelLut: pbr.ltcMagnitudeFresnelLut
-      )
+      ),
+      transform.model
     )
 
   let shadows = block:

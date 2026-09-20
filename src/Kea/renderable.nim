@@ -42,9 +42,6 @@ proc new*(
     topology
   )
 
-proc transform*(renderable: Renderable): var Transform =
-  renderable.transform
-
 proc position*(renderable: Renderable): var Vec3 =
   renderable.transform.position
 
@@ -65,6 +62,3 @@ proc rotation*(renderable: Renderable): var Mat3 =
 proc rotated*(renderable: Renderable): Mat3 =
   let transform = renderable.transform
   transform.rotation
-
-proc model*(renderable: Renderable): Mat4 =
-  renderable.transform.model

@@ -128,7 +128,7 @@ proc draws*(mcml: Mcml, res: Resources): seq[PBRDraw] =
     res.mesh(Cube),
     transform = transform.new(
       rotation = (-PI / 2).yaw,
-      scale = 5'f * [
+      scale = [
         mcml.depth,
         mcml.size,
         mcml.size
@@ -204,7 +204,10 @@ when isMainModule:
 
     mcml.update(photons = 20_000)
 
-    pbr.submit(mcml)
+    pbr.submit(
+      mcml,
+      transform.new(scale = 5.vec3)
+    )
 
     pbr.render(
       frame.backbuffer,

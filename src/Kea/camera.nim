@@ -29,7 +29,7 @@ proc new*(
   near = 0.1'f,
   far = 100.0'f,
   size = 10.0'f,
-  transform = Identity
+  transform = Transform.default
 ): Camera =
   Camera(
     transform: transform,

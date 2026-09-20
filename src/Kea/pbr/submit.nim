@@ -19,20 +19,22 @@ proc draw*[M](
 
   result = proc(
     gbuffer: GBufferTarget,
-    globals: GBufferGlobals
+    globals: GBufferGlobals,
+    parentModel: Mat4
   ) =
     renderer.render(
       target = gbuffer,
       items = ownedItems,
-      globals = globals
+      globals = globals,
+      parentModel = parentModel
     )
 
 proc draw*[M](
   mesh: Mesh,
   transform: Transform,
+  renderer: GBufferRenderer[M],
   material: M,
   topology: Topology = Triangles,
-  renderer: GBufferRenderer[M] = nil
 ): PBRDraw =
   draw(
     items = @[
@@ -48,6 +50,8 @@ proc draw*[M](
 
 proc draw*[M](
   mesh: Mesh,
+  renderer: GBufferRenderer[M],
+  material: M,
   x: float32 = 0.0,
   y: float32 = 0.0,
   z: float32 = 0.0,
@@ -55,9 +59,7 @@ proc draw*[M](
   pitch: float32 = 0.0,
   roll: float32 = 0.0,
   scale: Vec3 = vec3(1.0),
-  material: M,
   topology: Topology = Triangles,
-  renderer: GBufferRenderer[M] = nil
 ): PBRDraw =
   draw(
     mesh,
@@ -71,25 +73,28 @@ proc draw*[M](
       scale = scale
     ),
     material = material,
-    topology = topology,
-    renderer = renderer
+    renderer = renderer,
+    topology = topology
   )
 
 proc draw*(
+  res: Resources,
   renderable: Renderable,
   material: PBRMaterial = PBRMaterial.default,
-  topology: Topology = Triangles,
   renderer: GBufferRenderer[PBRMaterial] = nil
 ): PBRDraw =
   draw[PBRMaterial](
-    renderable.mesh,
-    renderable.transform,
+    mesh = renderable.mesh,
+    transform = renderable.transform,
+    topology = renderable.topology,
     material = material,
-    topology = topology,
-    renderer = renderer
+    renderer =
+      if renderer == nil: res.renderer
+      else: renderer
   )
 
 proc draw*(
+  res: Resources,
   mesh: Mesh,
   transform: Transform,
   material: PBRMaterial = PBRMaterial.default,
@@ -99,12 +104,15 @@ proc draw*(
   draw[PBRMaterial](
     mesh,
     transform,
-    material = material,
     topology = topology,
-    renderer = renderer
+    material = material,
+    renderer =
+      if renderer == nil: res.renderer
+      else: renderer
   )
 
 proc draw*(
+  res: Resources,
   mesh: Mesh,
   x: float32 = 0.0,
   y: float32 = 0.0,
@@ -119,12 +127,18 @@ proc draw*(
 ): PBRDraw =
   draw[PBRMaterial](
     mesh,
-    x, y, z,
-    yaw, pitch, roll,
-    scale,
-    material = material,
+    x = x,
+    y = y,
+    z = z,
+    yaw = yaw,
+    pitch = pitch,
+    roll = roll,
+    scale = scale,
     topology = topology,
-    renderer = renderer
+    material = material,
+    renderer =
+      if renderer == nil: res.renderer
+      else: renderer
   )
 
 proc submit*(pbr: PBR, draws: openArray[PBRDraw]) =
@@ -135,6 +149,25 @@ proc submit*(pbr: PBR, draw: PBRDraw) =
 
 proc submit*(pbr: PBR, source: PBRSource) =
   pbr.pending.add source.draws(pbr.res)
+
+proc submit*(
+  pbr: PBR,
+  source: PBRSource,
+  transform: Transform
+) =
+  let
+    draws = source.draws(pbr.res)
+    model = transform.model
+
+  let grouped: PBRDraw = proc(
+    gbuffer: GBufferTarget,
+    globals: GBufferGlobals,
+    parentModel: Mat4
+  ) =
+    for draw in draws:
+      draw(gbuffer, globals, parentModel * model)
+
+  pbr.pending.add grouped
 
 proc submit*[M](
   pbr: PBR,
@@ -208,15 +241,14 @@ proc submit*(
   pbr: PBR,
   renderable: Renderable,
   material: PBRMaterial = PBRMaterial.default,
-  topology: Topology = Triangles,
   renderer: GBufferRenderer[PBRMaterial] = nil
 ) =
   submit[PBRMaterial](
     pbr,
-    renderable.mesh,
-    renderable.transform,
+    mesh = renderable.mesh,
+    transform = renderable.transform,
+    topology = renderable.topology,
     material = material,
-    topology = topology,
     renderer =
       if renderer == nil: pbr.res.renderer
       else: renderer

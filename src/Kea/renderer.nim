@@ -133,7 +133,8 @@ proc render*[
   globals: G = G.default,
   cullMode: CullMode = CullDisabled,
   depthTest: DepthTest = DepthLess,
-  depthWrite: bool = true
+  depthWrite: bool = true,
+  parentModel: Mat4 = Identity4
 ) =
   when K == BackBuffer:
     when A.tupleLen != 1:
@@ -197,7 +198,7 @@ proc render*[
   for item in items:
     let
       renderable = item.renderable
-      model = renderable.transform.model
+      model = parentModel * renderable.transform.model
       nmat = model.inverse.transpose.upper(3)
 
     renderer.modelUniform.set(model)
