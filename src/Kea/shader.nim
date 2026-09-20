@@ -367,6 +367,7 @@ proc intrinsicName(symbol: NimNode): string =
     (bindSym"size", "textureSize"),
     (bindSym"normalize", "normalize"),
     (bindSym"dot", "dot"),
+    (bindSym"length", "length"),
     (bindSym"pow", "pow"),
     (bindSym"clamp", "clamp"),
     (bindSym"fwidth", "fwidth"),

@@ -25,24 +25,21 @@ for frame in kea.frames:
 
   orbit.update(frame)
 
-  frame.backbuffer.clear()
-
   pbr.submit(
     res.mesh(Quad),
     y = -1.0,
-    scale = [10'f, 10, 10],
+    scale = 10.vec3,
     pitch = -PI / 2.0,
     renderer = res.hooks(
       albedo = proc(frag: Frag): Color =
         let
-          x = floor(frag.uv.x * 8.0'f)
-          y = floor(frag.uv.y * 8.0'f)
-          checker = floorMod(x + y, 2.0'f)
+          uv = floor(frag.uv * 8.0)
+          checker = floorMod(uv.x + uv.y, 2.0'f)
 
         mix(Black, White, checker),
-
-      roughness = proc(frag: Frag): float32 =
-        0.15
+    ),
+    material = material.new(
+      roughness = 0.15'f
     )
   )
 
