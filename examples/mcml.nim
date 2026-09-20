@@ -1,7 +1,7 @@
-import Kea, std/[random, sequtils]
+import Kea, std/random
 
 type
-  Mcml* = object
+  Mcml* = ref object
     resolution: Positive
     absorption: float32
     scattering: float32
@@ -31,7 +31,7 @@ proc new*(
     diffuse: newSeq[float32](resolution * resolution)
   )
 
-proc update*(mcml: var Mcml, photons: Natural) =
+proc update*(mcml: Mcml, photons: Natural) =
   let
     N = mcml.resolution
     depth = mcml.depth
@@ -99,126 +99,70 @@ proc update*(mcml: var Mcml, photons: Natural) =
 
   mcml.photons += photons.uint32
 
-proc render*(
-  mcml: Mcml,
-  res: Resources,
-  target: RenderTarget,
-  camera: Camera,
-  x: float32 = 0.0,
-  y: float32 = 0.0,
-  z: float32 = 0.0,
-  yaw: float32 = 0.0,
-  pitch: float32 = 0.0,
-  roll: float32 = 0.0
-) =
-  proc vert(
-    vert: Vertex,
-    model: Mat4, nmat: Mat3,
-    view, proj: Mat4
-  ): tuple[
-    pos: Vec4,
-    objectNormal: Vec3,
-    worldNormal: Vec3,
-    uv: Vec2
-  ] =
-    result.pos = proj * view * model * vert.position.hom
-    result.objectNormal = vert.normal
-    result.worldNormal = (nmat * vert.normal).normalize
-    result.uv = vert.uv
-
-  proc frag(
-    objectNormal: Vec3,
-    worldNormal: Vec3,
-    uv: Vec2,
+proc draws*(mcml: Mcml, res: Resources): seq[PBRDraw] =
+  proc emissive(
+    frag: Frag,
     transmittance: Texture[R32Float],
     diffuse: Texture[R32Float],
     photons: uint32,
-    size: float32,
-  ): tuple[pixel: Vec4] =
+    size: float32
+  ): Color =
     proc density(tex: Texture[R32Float], uv: Vec2): float32 =
       let
         res = tex.size
-
         texelArea = (size / res.x.float32) *
           (size / res.y.float32)
 
       tex.sample(uv).r / (photons.float32 * texelArea)
 
-    let color =
-      if objectNormal.x > 0.99:
-        let
-          color = [0.20'f, 0.65, 0.95]
+    if frag.objectNormal.x > 0.99:
+      [0.20'f, 0.65, 0.95] * transmittance.density(frag.uv)
 
-          density = transmittance.density(uv)
+    elif frag.objectNormal.x < -0.99:
+      [0.35'f, 0.55, 1.0] * diffuse.density(frag.uv)
 
-        tonemap.exponential(color * density)
+    else:
+      Black
 
-      elif objectNormal.x < -0.99:
-        let
-          color = [0.35'f, 0.55, 1.0]
-
-          density = diffuse.density(uv)
-
-        tonemap.exponential(color * density)
-
-      else:
-        let
-          N = worldNormal.normalize
-          L = [0.4'f, 0.8, 0.6].normalize
-          ndotl = max(dot(N, L), 0.0)
-          lighting = 0.35 + 0.65 * ndotl
-
-        [0.28'f, 0.42, 0.48] * lighting
-
-    result.pixel = color.gamma.hom
-
-  let
-    transmittance = res.texture(
-      key = "mcml/transmittance",
-      data = mcml.transmittance,
-      width = mcml.resolution,
-      height = mcml.resolution,
-      format = R32Float,
-      DataTextureOptions
-    )
-
-    diffuse = res.texture(
-      key = "mcml/diffuse",
-      data = mcml.diffuse,
-      width = mcml.resolution,
-      height = mcml.resolution,
-      format = R32Float,
-      DataTextureOptions
-    )
-
-    slab = item.new(
-      res.mesh(Cube),
-      x = x,
-      y = y,
-      z = z,
-      yaw = yaw,
-      pitch = pitch,
-      roll = roll,
-      scale = [
+  result.add draw(
+    res.mesh(Cube),
+    transform = transform.new(
+      rotation = (-PI / 2).yaw,
+      scale = 5'f * [
         mcml.depth,
         mcml.size,
         mcml.size
-      ] * 0.5'f
-    )
+      ]
+    ),
+    renderer = res.hooks(
+      emissive = emissive
+    ),
+    material = material.new(
+      albedo = Black,
+      roughness = 0.15'f,
+      metallic = 0.0'f,
 
-  res.render(
-    renderer = "mcml/renderer",
-    target = target,
-    vert = vert,
-    frag = frag,
-    item = slab,
-    globals = (
-      view: camera.view,
-      proj: camera.proj target.aspect,
-      transmittance: transmittance,
-      diffuse: diffuse,
-      photons: mcml.photons,
-      size: mcml.size
+      transmittance = res.texture(
+        key = "mcml/transmittance",
+        data = mcml.transmittance,
+        width = mcml.resolution,
+        height = mcml.resolution,
+        format = R32Float,
+        DataTextureOptions
+      ),
+
+      diffuse = res.texture(
+        key = "mcml/diffuse",
+        data = mcml.diffuse,
+        width = mcml.resolution,
+        height = mcml.resolution,
+        format = R32Float,
+        DataTextureOptions
+      ),
+
+      photons = mcml.photons,
+
+      size = mcml.size
     )
   )
 
@@ -233,20 +177,22 @@ when isMainModule:
 
     res = resources.new(kea)
 
-    orbit = orbit.new(
-      camera.new(Perspective),
-      target = [0.0'f, 1.0, 0.0],
-      distance = 1.0
+    pbr = pbr.new(res)
+
+    mcml = new(
+      resolution = 512,
+      depth = 0.03'f,
+      absorption = 2'f,
+      scattering = 3'f,
+      anisotropy = 0.75'f,
+      size = 0.5'f
     )
 
-  var mcml = new(
-    resolution = 512,
-    depth = 0.03'f,
-    absorption = 2'f,
-    scattering = 3'f,
-    anisotropy = 0.75'f,
-    size = 0.5'f
-  )
+    orbit = orbit.new(
+      camera.new(Perspective),
+      target = [0.0'f, 0.0, 0.0],
+      distance = 10.0
+    )
 
   random.randomize()
 
@@ -258,14 +204,18 @@ when isMainModule:
 
     mcml.update(photons = 20_000)
 
-    frame.backbuffer.clear(color = White * 0.1)
+    pbr.submit(mcml)
 
-    mcml.render(
-      res,
+    pbr.render(
       frame.backbuffer,
       orbit.camera,
-      yaw = -(PI / 2.0),
-      y = 1.0
+      RectLight(
+        position: [0.0'f, 10.0, 0.0],
+        radiance: 0.5 * [10.0'f, 8.0'f, 6.0'f],
+        rotation: (PI/2).pitch,
+        width: 5.0'f,
+        height: 5.0'f
+      )
     )
 
     frame.present()

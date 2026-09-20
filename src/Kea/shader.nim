@@ -97,6 +97,7 @@ proc validateUserName(name: NimNode) =
 
   if value.startsWith("keaVary_") or
      value.startsWith("keaOut_") or
+     value.startsWith("keaHelper") or
      value.startsWith("keaTemp"):
     error "identifier uses reserved Kea prefix: " & value, name
 
@@ -475,12 +476,19 @@ proc identifiers(node: NimNode): seq[string] =
   for child in node:
     result.add child.identifiers
 
+proc helperName(symbol: NimNode, helpers: seq[NimNode]): string =
+  let index = helpers.find(symbol)
+
+  if index >= 0: "keaHelper" & $index
+  else: symbol.strVal
+
 proc emitBody(
   body: NimNode,
   stage: ShaderStage = NoStage,
   isShaderMain = false,
   hasResult = false,
-  varyings: seq[NimNode] = @[]
+  varyings: seq[NimNode] = @[],
+  helpers: seq[NimNode] = @[]
 ): string =
   var
     usedNames = body.identifiers
@@ -525,7 +533,7 @@ proc emitBody(
         result =
           if name.len > 0: name
           elif node in varyings: node.strVal.varyName
-          else: node.strVal
+          else: node.helperName(helpers)
 
     of nnkDotExpr:
       let field = node[1].strVal
@@ -999,7 +1007,7 @@ proc emitBody(
 
   body.emitStmt
 
-proc emitHelper(helper: NimNode): string =
+proc emitHelper(helper: NimNode, helpers: seq[NimNode]): string =
   proc zeroValue(typ: NimNode): string =
     let name = typ.glslType
     var values = @["0"]
@@ -1034,7 +1042,7 @@ proc emitHelper(helper: NimNode): string =
     validateUserName(param.name)
 
   result =
-    returnType & " " & helper.strVal &
+    returnType & " " & helper.helperName(helpers) &
     "(" & parameters & ") {\n"
 
   if hasResult and signature.returnType.isTextureType:
@@ -1044,7 +1052,7 @@ proc emitHelper(helper: NimNode): string =
     result.add returnType & " result = " &
       signature.returnType.zeroValue & ";\n"
 
-  result.add body.emitBody(hasResult = hasResult)
+  result.add body.emitBody(hasResult = hasResult, helpers = helpers)
 
   if hasResult:
     result.add "return result;\n"
@@ -1054,13 +1062,15 @@ proc emitHelper(helper: NimNode): string =
 proc emitMain(
   body: NimNode,
   stage: ShaderStage,
-  varyings: seq[NimNode] = @[]
+  varyings: seq[NimNode] = @[],
+  helpers: seq[NimNode] = @[]
 ): string =
   "\nvoid main() {\n" &
   body.emitBody(
     stage = stage,
     isShaderMain = true,
-    varyings = varyings
+    varyings = varyings,
+    helpers = helpers
   ) &
   "}"
 
@@ -1128,10 +1138,10 @@ proc vertGlslImpl*(shader: NimNode): string =
     result.add "uniform " & declaration(param.typ, name.strVal)
 
   result.add "\n" & helpers
-    .mapIt(it.emitHelper)
+    .mapIt(it.emitHelper(helpers))
     .join("\n")
 
-  result.add body.emitMain(stage = VertexStage)
+  result.add body.emitMain(stage = VertexStage, helpers = helpers)
 
 proc fragGlslImpl*(vert, frag: NimNode): string =
   let
@@ -1201,12 +1211,13 @@ proc fragGlslImpl*(vert, frag: NimNode): string =
     )
 
   result.add "\n" & helpers
-    .mapIt(it.emitHelper)
+    .mapIt(it.emitHelper(helpers))
     .join("\n")
 
   result.add body.emitMain(
     stage = FragmentStage,
-    varyings = varyings
+    varyings = varyings,
+    helpers = helpers
   )
 
 macro vertGlsl*(shader: typed): string =

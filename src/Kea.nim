@@ -31,11 +31,9 @@ export
   target,
   core,
   frame,
-  renderer,
   math,
   primitives,
   transform,
-  camera,
   pbr,
   mesh,
   input,
@@ -52,3 +50,6 @@ export
   pbr,
   submit,
   gbuffer
+
+export renderer except transform
+export camera except transform

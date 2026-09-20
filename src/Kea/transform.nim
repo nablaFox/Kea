@@ -10,9 +10,9 @@ type
 
 const Identity* = Transform(
   cachedMatrix: Identity4,
-  position: vec3(0.0),
+  position: 0.vec3,
   rotation: Identity3,
-  scale: vec3(1.0),
+  scale: 1.vec3,
   dirty: false
 )
 
@@ -50,9 +50,9 @@ proc roll*(value: float32): Mat3 =
   ]
 
 proc new*(
-  position: Vec3,
+  position: Vec3 = 0.vec3,
   rotation: Mat3 = Identity3,
-  scale: Vec3 = vec3(1.0),
+  scale: Vec3 = 1.vec3,
 ): Transform =
   Transform(
     position: position,
@@ -70,7 +70,7 @@ proc new*(
   yaw: float32 = 0.0,
   pitch: float32 = 0.0,
   roll: float32 = 0.0,
-  scale: Vec3 = vec3(1.0),
+  scale: Vec3 = 1.vec3,
 ): Transform =
   Transform(
     position: [x, y, z],

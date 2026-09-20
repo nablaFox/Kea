@@ -10,6 +10,7 @@ type
     uv*: Vec2
 
   Frag* = object
+    objectNormal*: Vec3
     worldNormal*: Vec3
     worldPosition*: Vec3
     albedo*: Vec3
@@ -17,6 +18,7 @@ type
     metallic*: float32
     view*: Vec3
     uv*: Vec2
+    emissive*: Vec3
 
 proc liftLambda(
   hook: NimNode,
@@ -88,6 +90,7 @@ macro renderer*(
     ): tuple[
       pos: Vec4,
       uv: Vec2,
+      objectNormal: Vec3,
       worldNormal: Vec3,
       worldPosition: Vec3
     ] =
@@ -104,6 +107,7 @@ macro renderer*(
         P = model * deformed.position.hom
 
       result.pos = proj * view * P
+      result.objectNormal = deformed.normal
       result.worldPosition = P.xyz
       result.worldNormal = nmat * deformed.normal
       result.uv = deformed.uv
@@ -115,9 +119,11 @@ macro renderer*(
     surfaceHook,
     args = hookArgs(surfaceParams),
     frag = ident"frag",
+    objectNormal = ident"objectNormal",
     worldNormal = ident"worldNormal",
     worldPosition = ident"worldPosition",
     uv = ident"uv",
+    emissive = ident"emissive",
     albedo = ident"albedo",
     roughness = ident"roughness",
     metallic = ident"metallic",
@@ -139,6 +145,7 @@ macro renderer*(
     result = ident"result"
   ):
     proc frag(
+      objectNormal: Vec3,
       worldNormal: Vec3,
       worldPosition: Vec3,
       uv: Vec2,
@@ -162,13 +169,15 @@ macro renderer*(
 
         surf = surfaceHook(
           Frag(
+            objectNormal: objectNormal,
             worldNormal: N,
             worldPosition: P,
             albedo: albedo,
             roughness: roughness,
             metallic: metallic,
             view: V,
-            uv: uv
+            uv: uv,
+            emissive: 0.vec3
           ),
           args
         )
@@ -200,7 +209,7 @@ macro renderer*(
           terms =
             ltcMagnitudeFresnelLut.sample(lutUv).xy
 
-        light.radiance(
+        surf.emissive + light.radiance(
           P, surfaceNormal, V,
           surf.albedo,
           surf.metallic,
@@ -244,7 +253,8 @@ macro hooks*(
   metallic: typed = nil,
   position: typed = nil,
   normal: typed = nil,
-  worldNormal: typed = nil
+  worldNormal: typed = nil,
+  emissive: typed = nil
 ): untyped =
   let
     hookDefs = newStmtList()
@@ -311,11 +321,11 @@ macro hooks*(
 
   deformDef.addOverride("position", position)
   deformDef.addOverride("normal", normal)
-
   surfaceDef.addOverride("albedo", albedo)
   surfaceDef.addOverride("roughness", roughness)
   surfaceDef.addOverride("metallic", metallic)
   surfaceDef.addOverride("worldNormal", worldNormal)
+  surfaceDef.addOverride("emissive", emissive)
 
   result = genAst(
     res,

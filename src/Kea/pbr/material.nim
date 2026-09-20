@@ -15,7 +15,7 @@ const
     metallic: 0.0'f
   )
 
-proc new*(
+proc baseMaterial(
   albedo: Color = [1.0, 1.0, 1.0],
   roughness: float32 = 0.5,
   metallic: float32 = 0.0
@@ -26,10 +26,17 @@ proc new*(
     metallic: metallic
   )
 
+proc new*(
+  albedo: Color = [1.0, 1.0, 1.0],
+  roughness: float32 = 0.5,
+  metallic: float32 = 0.0
+): auto =
+  baseMaterial(albedo, roughness, metallic)
+
 macro new*(args: varargs[untyped]): untyped =
   let
     base = genSym(nskLet, "material")
-    baseCall = newCall(bindSym"new")
+    baseCall = newCall(bindSym"baseMaterial")
     fields = newNimNode(nnkTupleConstr)
 
   for name in ["albedo", "roughness", "metallic"]:
